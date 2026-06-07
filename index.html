@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>极速跑腿 - 湖北大学专属校园互助平台</title>
+    <style>
+        :root { --primary: #ff6b6b; --primary-dark: #e55a5a; --teal: #4ecdc4; --text: #1a1a2e; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #1a1a2e; color: #fff;
+            -webkit-font-smoothing: antialiased;
+            letter-spacing: .025em; line-height: 1.7;
+        }
+
+        .hero {
+            min-height: 100vh;
+            background: linear-gradient(160deg, #ff6b6b 0%, #e55a5a 35%, #c44569 100%);
+            position: relative;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            padding: 6rem 6% 5rem;
+            overflow: hidden;
+        }
+        .hero::before {
+            content: ''; position: absolute;
+            width: 750px; height: 750px;
+            background: radial-gradient(circle, rgba(255,255,255,.055) 0%, transparent 70%);
+            top: -220px; left: -160px; border-radius: 50%; pointer-events: none;
+        }
+        .hero::after {
+            content: ''; position: absolute;
+            width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(255,255,255,.04) 0%, transparent 70%);
+            bottom: -120px; right: -80px; border-radius: 50%; pointer-events: none;
+        }
+
+        .nav {
+            position: absolute; top: 0; left: 0; right: 0;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 1.8rem 6%; z-index: 10;
+        }
+        .nav-logo { font-size: 1.55rem; font-weight: 800; letter-spacing: .06em; text-shadow: 0 2px 8px rgba(0,0,0,.07); }
+        .nav-links { display: flex; align-items: center; gap: 12px; }
+        .nav-btn {
+            padding: .55rem 1.3rem; border-radius: 24px;
+            font-size: .88rem; font-weight: 600; cursor: pointer;
+            text-decoration: none; letter-spacing: .03em;
+            transition: all .25s;
+            background: rgba(255,255,255,.17); color: #fff;
+            border: 1.5px solid rgba(255,255,255,.28);
+            backdrop-filter: blur(8px);
+        }
+        .nav-btn:hover { background: rgba(255,255,255,.95); color: var(--primary); border-color: transparent; }
+        .nav-btn-loc {
+            display: flex; align-items: center; gap: 5px;
+            background: rgba(255,255,255,.17); color: #fff;
+            border: 1.5px solid rgba(255,255,255,.28);
+            backdrop-filter: blur(8px);
+        }
+
+        .hero-content { position: relative; z-index: 5; text-align: center; max-width: 1100px; width: 100%; }
+        .hero-content h1 {
+            font-size: clamp(2.1rem, 5vw, 3.3rem);
+            font-weight: 800; letter-spacing: .06em;
+            margin-bottom: 1rem; line-height: 1.3;
+            text-shadow: 0 4px 20px rgba(0,0,0,.1);
+            animation: fadeDown .7s ease;
+        }
+        .hero-content .sub {
+            font-size: clamp(1.05rem, 2.5vw, 1.3rem);
+            font-weight: 600; opacity: .93;
+            margin-bottom: 2.4rem; letter-spacing: .05em;
+        }
+        .hero-content .desc {
+            font-size: .98rem; opacity: .8; max-width: 720px;
+            margin: 0 auto 3.5rem; line-height: 2.1; letter-spacing: .03em;
+        }
+
+        .card-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem; animation: fadeUp .8s ease;
+        }
+        .card {
+            background: rgba(255,255,255,.1); backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255,255,255,.18);
+            border-radius: 18px; padding: 2.4rem 1.3rem;
+            color: #fff; text-decoration: none;
+            transition: all .4s cubic-bezier(.4,0,.2,1);
+            text-align: center; display: flex;
+            flex-direction: column; align-items: center; gap: 1rem;
+        }
+        .card:hover {
+            transform: translateY(-10px);
+            background: rgba(255,255,255,.97); color: #1a1a2e;
+            box-shadow: 0 20px 48px rgba(0,0,0,.22); border-color: transparent;
+        }
+        .card-icon { font-size: 3rem; transition: transform .3s; }
+        .card:hover .card-icon { transform: scale(1.15); }
+        .card h3 { font-size: 1.2rem; font-weight: 700; letter-spacing: .03em; }
+        .card p { font-size: .86rem; opacity: .82; line-height: 1.8; letter-spacing: .03em; }
+        .card:hover p { opacity: 1; color: #4a4a5a; }
+
+        .tracker-float {
+            position: fixed; bottom: 2rem; right: 2rem;
+            background: var(--teal); color: #fff;
+            padding: .9rem 1.4rem; border-radius: 2rem;
+            font-weight: 700; font-size: .92rem; text-decoration: none;
+            box-shadow: 0 6px 24px rgba(78,205,196,.45);
+            display: none; z-index: 200;
+            animation: bounce 2s infinite;
+            letter-spacing: .03em;
+            border: 2px solid rgba(255,255,255,.5);
+        }
+        .tracker-float:hover { background: #3cb8b0; }
+
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 300; display: none; justify-content: center; align-items: flex-end; }
+        .overlay.on { display: flex; }
+        .sheet {
+            background: #fff; border-radius: 22px 22px 0 0;
+            width: 100%; max-width: 500px; padding: 1.8rem;
+            animation: slideUp .3s ease; color: #1a1a2e;
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .sheet h3 { font-size: 1.1rem; text-align: center; margin-bottom: 1rem; font-weight: 700; letter-spacing: .04em; }
+        .sheet .opt {
+            padding: .95rem 1.2rem; border-radius: 12px;
+            background: #f5f6f8; margin-bottom: .6rem;
+            cursor: pointer; font-size: .93rem;
+            display: flex; align-items: center; gap: .6rem;
+            transition: background .2s; letter-spacing: .03em;
+        }
+        .sheet .opt:active { background: #e8e9ec; }
+        .sheet .opt.sel { background: #fff0f0; border: 1.5px solid var(--primary); }
+        .sheet .close-btn { display: block; width: 100%; padding: .8rem; background: #eee; border: none; border-radius: 2rem; font-size: .93rem; cursor: pointer; margin-top: .6rem; letter-spacing: .03em; }
+
+        @keyframes fadeDown { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes bounce { 0%,20%,50%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-8px)} 60%{transform:translateY(-4px)} }
+
+        @media (max-width: 1024px) { .card-grid { grid-template-columns: repeat(2, 1fr); gap: 1.2rem; } .hero { min-height: auto; padding: 8rem 5% 5rem; } }
+        @media (max-width: 600px) { .card-grid { grid-template-columns: 1fr; } .nav { padding: 1.2rem 5%; } }
+    </style>
+</head>
+<body>
+
+    <div class="hero">
+        <nav class="nav">
+            <div class="nav-logo">极速跑腿</div>
+            <div class="nav-links">
+                <span class="nav-btn nav-btn-loc" onclick="toggleLoc()" id="locDisplay">📍 湖北大学 · 武昌校区</span>
+                <a href="runner.html" class="nav-btn">🏍️ 骑手接单</a>
+            </div>
+        </nav>
+
+        <div class="hero-content">
+            <h1>擎旗聚力书壮志 &nbsp;·&nbsp; 笃行实干驰万里</h1>
+            <p class="sub">湖北大学专属 &nbsp;·&nbsp; 一站式校园网络互助与青年实干平台</p>
+            <p class="desc">
+                服务湖大学子，凝聚青春力量。我们深挖校园生活<br>
+                「时空矛盾」与「碎片化时间」痛点，全面覆盖<br>
+                校内各期驿站与宿舍楼栋，提供无惧风雨的极速配送服务。
+            </p>
+
+            <div class="card-grid">
+                <a href="order.html?type=express" class="card">
+                    <span class="card-icon">📦</span>
+                    <h3>专属快递代取</h3>
+                    <p>告别远距离奔波，覆盖校内各大快递驿站，一键下单，直达宿舍楼下。</p>
+                </a>
+                <a href="order.html?type=food" class="card">
+                    <span class="card-icon">🍔</span>
+                    <h3>暖心食堂代买</h3>
+                    <p>嘉会园、桃李园、风华园随心选。骑手接单即取，保温极速送达。</p>
+                </a>
+                <a href="order.html?type=print" class="card">
+                    <span class="card-icon">🖨️</span>
+                    <h3>加急资料代印</h3>
+                    <p>期末复习、毕业论文、保研材料一键下单，注重信息安全与隐私保护。</p>
+                </a>
+                <a href="order.html?type=shop" class="card">
+                    <span class="card-icon">🛒</span>
+                    <h3>全能超市代购</h3>
+                    <p>日用品、备考零食、学习文具在线提交清单，消费小票公开透明。</p>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <a href="status.html" class="tracker-float" id="trackerFloat">🚴 追踪订单 ›</a>
+
+    <div class="overlay" id="locOverlay" onclick="if(event.target===this) toggleLoc()">
+        <div class="sheet">
+            <h3>📍 选择你的校区位置</h3>
+            <div class="opt sel" onclick="pickLoc('湖北大学 · 武昌校区', this)">🏫 湖北大学 · 武昌校区（友谊大道 368 号）</div>
+            <div class="opt" onclick="pickLoc('一期学生公寓', this)">🏢 一期学生公寓（A / B 栋）</div>
+            <div class="opt" onclick="pickLoc('二期学生公寓', this)">🏢 二期学生公寓（A - G 栋）</div>
+            <div class="opt" onclick="pickLoc('团结学生公寓', this)">🏢 团结学生公寓</div>
+            <div class="opt" onclick="pickLoc('普宿 8栋 / 9栋', this)">🏢 普宿 8 栋 / 9 栋</div>
+            <div class="opt" onclick="pickLoc('校外诚信公寓', this)">🏠 校外诚信公寓（a / b / c 栋）</div>
+            <button class="close-btn" onclick="toggleLoc()">关闭</button>
+        </div>
+    </div>
+
+    <script>
+        function toggleLoc() { document.getElementById('locOverlay').classList.toggle('on'); }
+        function pickLoc(name, el) {
+            document.getElementById('locDisplay').textContent = '📍 ' + name;
+            document.querySelectorAll('.opt').forEach(o => o.classList.remove('sel'));
+            el.classList.add('sel');
+            localStorage.setItem('user_campus_location', name);
+            setTimeout(toggleLoc, 300);
+        }
+        (function() {
+            const raw = localStorage.getItem('current_running_order');
+            if (raw) { try { const d = JSON.parse(raw); if (d.status === 'accepted' || d.status === 'delivering') document.getElementById('trackerFloat').style.display = 'block'; } catch(e) {} }
+            const saved = localStorage.getItem('user_campus_location');
+            if (saved) document.getElementById('locDisplay').textContent = '📍 ' + saved;
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>极速跑腿 - 骑手接单端</title>
+    <style>
+        :root { --primary: #4ecdc4; --accent: #ff6b6b; --bg: #f5f6f8; --card: #fff; --text: #1a1a2e; --sub: #6b7280; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg); color: var(--text);
+            -webkit-font-smoothing: antialiased;
+            letter-spacing: .025em; line-height: 1.65;
+            padding-top: 64px; padding-bottom: 24px;
+        }
+        header {
+            background: #1a1a2e; color: #fff; position: fixed; width: 100%;
+            top: 0; z-index: 1000; padding: 14px 5%;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        header h2 { font-size: 1.1rem; font-weight: 700; letter-spacing: .04em; }
+        .hdr-actions { display: flex; gap: 12px; align-items: center; }
+        .hdr-actions a { color: rgba(255,255,255,.8); text-decoration: none; font-size: .82rem; transition: color .2s; }
+        .hdr-actions a:hover { color: #fff; }
+        .btn-rst { background: var(--accent); color: #fff; border: none; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: .78rem; font-weight: 600; letter-spacing: .03em; transition: opacity .2s; }
+        .btn-rst:hover { opacity: .85; }
+
+        .container { max-width: 800px; margin: 0 auto; padding: 1.2rem 5%; }
+
+        .wallet {
+            background: linear-gradient(135deg, #1a1a2e 0%, #2d3047 100%);
+            color: #fff; border-radius: 18px; padding: 1.6rem;
+            margin-bottom: 1rem; display: flex; justify-content: space-between;
+            align-items: center; box-shadow: 0 6px 24px rgba(0,0,0,.15);
+        }
+        .wallet .wl h4 { font-size: .8rem; color: #8e9aaf; margin-bottom: 6px; font-weight: 500; letter-spacing: .03em; }
+        .wallet .wl h2 { font-size: 2.1rem; color: var(--primary); font-weight: 800; letter-spacing: .02em; }
+        .wallet .wi { font-size: 2.8rem; opacity: .8; }
+
+        .stats { display: flex; gap: 8px; margin-bottom: 1rem; }
+        .st { flex: 1; background: var(--card); border-radius: 14px; padding: 14px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.03); }
+        .st .v { font-size: 1.2rem; font-weight: 800; }
+        .st .l { font-size: .72rem; color: var(--sub); margin-top: 4px; letter-spacing: .03em; }
+
+        .tabs { display: flex; background: #fff; border-radius: 26px; padding: 4px; margin-bottom: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,.03); }
+        .tab { flex: 1; text-align: center; padding: 11px; border-radius: 22px; font-size: .87rem; font-weight: 600; cursor: pointer; color: #999; transition: .2s; letter-spacing: .03em; }
+        .tab.on { background: #1a1a2e; color: #fff; }
+
+        .job {
+            background: #fff; border-radius: 16px; padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,.03); margin-bottom: 1rem;
+            border-left: 5px solid var(--primary);
+        }
+        .job.shop { border-left-color: #8b5cf6; } .job.food { border-left-color: var(--accent); }
+        .job-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+        .job-tag { font-size: .77rem; padding: 4px 12px; border-radius: 6px; font-weight: 700; letter-spacing: .03em; }
+        .t-exp { background: #fff0f0; color: var(--accent); } .t-food { background: #fff5ea; color: #e67e22; }
+        .t-prn { background: #e8f4fd; color: #2e86de; } .t-shop { background: #f3e8ff; color: #8b5cf6; }
+        .job-price { text-align: right; }
+        .job-price .big { font-size: 1.5rem; font-weight: 800; color: var(--accent); }
+        .job-price .sm { font-size: .72rem; color: #999; display: block; margin-top: 2px; }
+        .job-route { display: flex; align-items: center; gap: 8px; font-size: .87rem; color: var(--sub); margin-bottom: 8px; letter-spacing: .03em; }
+        .job-route .arw { color: var(--primary); font-weight: 700; }
+        .job-info { display: flex; gap: 14px; font-size: .8rem; color: #999; margin-bottom: 10px; flex-wrap: wrap; letter-spacing: .03em; }
+
+        .btn { width: 100%; padding: 13px; border: none; border-radius: 14px; font-size: .95rem; font-weight: 700; cursor: pointer; margin-top: 10px; transition: all .2s; letter-spacing: .04em; }
+        .btn:active { transform: scale(.97); }
+        .btn-grab { background: var(--primary); color: #fff; box-shadow: 0 4px 14px rgba(78,205,196,.3); }
+        .btn-done { background: linear-gradient(135deg, #ff6b6b, #e55a5a); color: #fff; box-shadow: 0 4px 14px rgba(255,107,107,.3); }
+        .btn-skip { background: #f5f5f5; color: #999; }
+        .btn-out { background: #fff; color: var(--primary); border: 2px solid var(--primary); }
+
+        .empty { text-align: center; padding: 3.5rem 2rem; background: #fff; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.03); color: #999; }
+        .empty .ic { font-size: 3.2rem; margin-bottom: 12px; }
+        .empty h3 { font-size: 1.05rem; margin-bottom: 6px; letter-spacing: .03em; color: #555; }
+        .empty p { font-size: .83rem; }
+        .done-card { border-left: 5px solid #2ecc71; text-align: center; padding: 2.2rem 1.5rem; }
+
+        .hist-item {
+            background: #fff; border-radius: 12px; padding: 15px; margin-bottom: 8px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 1px 4px rgba(0,0,0,.02);
+        }
+        .hist-item .inf .tt { font-weight: 700; font-size: .9rem; letter-spacing: .03em; }
+        .hist-item .inf .sub { font-size: .76rem; color: #999; margin-top: 2px; }
+        .hist-item .inf .date { font-size: .68rem; color: #ccc; margin-top: 2px; }
+        .hist-item .earn { font-size: 1.15rem; font-weight: 800; color: #2ecc71; }
+
+        .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,.82); color: #fff; padding: 14px 28px; border-radius: 28px; font-size: .88rem; z-index: 999; pointer-events: none; opacity: 0; transition: opacity .3s; letter-spacing: .03em; }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h2>🏍️ 骑手接单中心</h2>
+        <div class="hdr-actions">
+            <a href="index.html">🏠 首页</a>
+            <button class="btn-rst" onclick="resetAll()">清空重测</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="wallet">
+            <div class="wl"><h4>累计跑腿收入</h4><h2 id="walletAmt">¥ 0.00</h2></div>
+            <div class="wi">💰</div>
+        </div>
+        <div class="stats">
+            <div class="st"><div class="v" id="stRate">⭐ 4.9</div><div class="l">好评率</div></div>
+            <div class="st"><div class="v" id="stSpeed">⚡ 8 min</div><div class="l">平均接单</div></div>
+            <div class="st"><div class="v" id="stOrders">0</div><div class="l">总完成单</div></div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab on" onclick="swTab('pool', this)">📋 任务大厅</div>
+            <div class="tab" onclick="swTab('mine', this)">🚴 我的配送</div>
+            <div class="tab" onclick="swTab('hist', this)">📊 历史记录</div>
+        </div>
+
+        <div id="tabPool"></div>
+        <div id="tabMine" style="display:none;"></div>
+        <div id="tabHist" style="display:none;"></div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let cur = 'pool';
+        function swTab(t, el) {
+            cur = t;
+            document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
+            if (el) el.classList.add('on');
+            document.querySelectorAll('#tabPool,#tabMine,#tabHist').forEach(x => x.style.display = 'none');
+            document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = 'block';
+            render();
+        }
+
+        function render() { updWallet(); if (cur === 'pool') rPool(); else if (cur === 'mine') rMine(); else rHist(); }
+
+        function updWallet() {
+            const b = parseFloat(localStorage.getItem('runner_wallet_balance') || '0');
+            document.getElementById('walletAmt').textContent = '¥ ' + b.toFixed(2);
+            document.getElementById('stOrders').textContent = parseInt(localStorage.getItem('runner_total_orders') || '0');
+        }
+
+        function getOrd() { try { const r = localStorage.getItem('current_running_order'); return r ? JSON.parse(r) : null; } catch(e) { return null; } }
+
+        function rPool() {
+            const p = document.getElementById('tabPool'), o = getOrd();
+            if (!o || o.status === 'confirmed') {
+                p.innerHTML = `<div class="empty"><div class="ic">📭</div><h3>暂无跑腿任务</h3><p>有新订单时会实时显示</p><p style="font-size:.7rem;color:#ccc;margin-top:6px;">🔄 自动刷新中…</p></div>`;
+                return;
+            }
+            if (o.status === 'pending') {
+                const tc = o.type === 'shop' ? 't-shop' : o.type === 'food' ? 't-food' : o.type === 'print' ? 't-prn' : 't-exp';
+                p.innerHTML = `
+                <div class="job ${o.type||''}">
+                    <div class="job-top">
+                        <span class="job-tag ${tc}">${o.title}</span>
+                        <div class="job-price"><div class="big">¥ ${o.riderFee}</div><span class="sm">到手价（已扣 5% 平台费）</span></div>
+                    </div>
+                    <div class="job-route"><span>📦 ${o.startLoc}</span><span class="arw">→</span><span>🏠 ${o.endLoc}</span></div>
+                    <div class="job-info"><span>📏 ${o.distance}</span><span>💰 雇主实付 ¥ ${o.totalPay}</span>${o.tip > 0 ? `<span>🎁 小费 ¥ ${o.tip}</span>` : ''}</div>
+                    <div class="job-info"><span>📝 ${o.details || '无备注'}</span><span>📱 ${o.phone}</span></div>
+                    <button class="btn btn-grab" onclick="doAccept()">⚡ 立即抢单</button>
+                </div>`;
+            } else if (o.status === 'accepted') {
+                p.innerHTML = `
+                <div class="job" style="border-left-color:#f39c12;">
+                    <div class="job-top"><span>${o.title}</span><div class="job-price"><div class="big">¥ ${o.riderFee}</div></div></div>
+                    <div style="text-align:center;padding:18px;">
+                        <div style="font-size:3rem;">🛵</div>
+                        <h3 style="color:#f39c12;margin:8px 0;">正在配送中</h3>
+                        <p style="font-size:.88rem;color:#666;">${o.startLoc} → ${o.endLoc}</p>
+                        <p style="font-size:.8rem;color:#999;">📱 雇主电话：${o.phone}</p>
+                    </div>
+                    <button class="btn btn-done" onclick="doDeliver()">✅ 确认送达（通知雇主收货）</button>
+                    <button class="btn btn-skip" onclick="toast('📞 正在呼叫雇主 ${o.phone}')">📞 联系雇主</button>
+                </div>`;
+            } else if (o.status === 'delivering') {
+                p.innerHTML = `
+                <div class="job" style="border-left-color:#2ecc71;text-align:center;">
+                    <div style="font-size:3rem;">⏳</div>
+                    <h3 style="color:#2ecc71;margin:8px 0;">已送达，等待雇主确认</h3>
+                    <p style="color:#666;">佣金 ¥ ${o.riderFee} 待结算</p>
+                </div>`;
+            }
+        }
+
+        function rMine() {
+            const m = document.getElementById('tabMine'), o = getOrd();
+            if (!o || o.status === 'pending') { m.innerHTML = `<div class="empty"><div class="ic">👀</div><h3>还没有接单</h3><p>去「任务大厅」抢单开始赚钱吧</p></div>`; return; }
+            if (o.status === 'accepted') {
+                m.innerHTML = `
+                <div class="job" style="border-left-color:#f39c12;">
+                    <div class="job-top"><span>${o.title}</span><span style="color:#f39c12;font-weight:700;">配送中</span></div>
+                    <div class="job-route"><span>📦 ${o.startLoc}</span><span class="arw">→</span><span>🏠 ${o.endLoc}</span></div>
+                    <div class="job-info"><span>📏 ${o.distance}</span><span>📱 ${o.phone}</span></div>
+                    <div class="job-info"><span>📝 ${o.details || '无备注'}</span></div>
+                    <button class="btn btn-done" onclick="doDeliver()">✅ 确认送达（通知雇主收货）</button>
+                </div>`;
+            } else if (o.status === 'delivering') {
+                m.innerHTML = `<div class="job" style="border-left-color:#2ecc71;text-align:center;"><div style="font-size:3rem;">⏳</div><h3 style="color:#2ecc71;margin:8px 0;">已送达，等待雇主确认</h3><p style="color:#666;">佣金 ¥ ${o.riderFee} 待结算</p></div>`;
+            } else if (o.status === 'confirmed') {
+                m.innerHTML = `<div class="job done-card"><div style="font-size:3rem;">🎉</div><h3 style="color:#2ecc71;">订单完结</h3><p style="color:#555;">佣金 <strong>¥ ${o.commissionReceived||o.riderFee}</strong> 已到账</p></div>`;
+            }
+        }
+
+        function rHist() {
+            const h = document.getElementById('tabHist'), list = JSON.parse(localStorage.getItem('runner_order_history') || '[]');
+            if (list.length === 0) { h.innerHTML = `<div class="empty"><div class="ic">📊</div><h3>暂无历史记录</h3><p>完成配送后自动显示</p></div>`; return; }
+            h.innerHTML = list.reverse().map(o => `
+                <div class="hist-item">
+                    <div class="inf">
+                        <div class="tt">${o.title||'跑腿订单'}</div>
+                        <div class="sub">${o.startLoc||''} → ${o.endLoc||''}</div>
+                        <div class="date">${o.date||''}</div>
+                    </div>
+                    <div class="earn">+ ¥ ${o.earned||'0.00'}</div>
+                </div>
+            `).join('');
+        }
+
+        function doAccept() {
+            const o = getOrd(); if (!o) return;
+            o.status = 'accepted'; o.acceptedAt = new Date().toISOString();
+            localStorage.setItem('current_running_order', JSON.stringify(o));
+            toast('🎉 抢单成功！请火速前往取件');
+            setTimeout(render, 400);
+        }
+
+        function doDeliver() {
+            if (!confirm('确认已将物品送达雇主手中？\n\n点击确定后：\n1. 雇主端将显示「确认收货」按钮\n2. 雇主确认后佣金自动到账')) return;
+            const o = getOrd(); if (!o) return;
+            o.status = 'delivering'; o.deliveredAt = new Date().toISOString();
+            localStorage.setItem('current_running_order', JSON.stringify(o));
+            const hist = JSON.parse(localStorage.getItem('runner_order_history') || '[]');
+            hist.push({ title: o.title, startLoc: o.startLoc, endLoc: o.endLoc, earned: o.riderFee, date: new Date().toLocaleDateString('zh-CN') });
+            localStorage.setItem('runner_order_history', JSON.stringify(hist));
+            toast('✅ 已通知雇主确认收货，待结算');
+            setTimeout(render, 400);
+        }
+
+        function resetAll() {
+            if (!confirm('确定清空所有订单和钱包数据？不可恢复！')) return;
+            ['current_running_order','runner_wallet_balance','runner_order_history','runner_total_orders'].forEach(k => localStorage.removeItem(k));
+            updWallet(); render(); toast('✅ 已重置');
+        }
+
+        function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._tid); t._tid = setTimeout(() => t.classList.remove('show'), 2000); }
+
+        render();
+        setInterval(render, 3000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订单追踪 - 极速跑腿</title>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=ee82dda67edc76f0892db73c002cdbd0&plugin=AMap.Geocoder"></script>
+    <style>
+        :root { --primary: #ff6b6b; --teal: #4ecdc4; --bg: #f5f6f8; --card: #fff; --text: #1a1a2e; --sub: #6b7280; --border: #e5e7eb; --r: 16px; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; letter-spacing: .025em; line-height: 1.65; }
+        header { background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.04); position: fixed; width: 100%; top: 0; z-index: 1000; }
+        nav { display:flex; justify-content:space-between; align-items:center; padding: .9rem 5%; max-width: 1200px; margin: 0 auto; }
+        .logo { font-size: 1.25rem; font-weight: 800; color: var(--primary); cursor: pointer; letter-spacing: .04em; }
+        .badge { font-size: .78rem; padding: 5px 14px; border-radius: 16px; font-weight: 700; letter-spacing: .03em; }
+        .b-pending { background: #fff9ea; color: #8b6914; }
+        .b-accepted { background: #fff0f0; color: var(--primary); }
+        .b-delivering { background: #e6faf8; color: #0d9488; animation: pulse 1.2s infinite; }
+        .b-done { background: #e6faf8; color: #0d9488; }
+        @keyframes pulse { 50% { opacity: .55; } }
+
+        .main { max-width: 800px; margin: 66px auto 2rem; padding: 1rem 1.5rem; }
+
+        .status-card { background: var(--card); border-radius: var(--r); padding: 1.6rem; box-shadow: 0 2px 12px rgba(0,0,0,.04); text-align: center; margin-bottom: .8rem; }
+        .status-card h2 { font-size: 1.4rem; color: var(--primary); font-weight: 800; letter-spacing: .04em; margin-bottom: .4rem; }
+        .status-card .desc { color: var(--sub); font-size: .88rem; letter-spacing: .03em; margin-bottom: 1.2rem; }
+
+        .tl { display:flex; justify-content:space-between; max-width: 460px; margin: 0 auto 1rem; }
+        .tl-s { flex:1; text-align:center; }
+        .tl-d { width: 30px; height: 30px; border-radius: 50%; background: #ddd; color: #fff; line-height: 30px; margin: 0 auto 5px; font-size: .8rem; transition: .3s; }
+        .tl-s.done .tl-d { background: var(--teal); box-shadow: 0 0 10px rgba(78,205,196,.3); }
+        .tl-s.cur .tl-d { background: var(--primary); box-shadow: 0 0 18px rgba(255,107,107,.5); animation: pulse-dot 1.5s infinite; }
+        @keyframes pulse-dot { 0%,100% { box-shadow:0 0 8px rgba(255,107,107,.3); } 50% { box-shadow:0 0 24px rgba(255,107,107,.6); } }
+        .tl-l { font-size: .76rem; color: #999; letter-spacing: .03em; }
+        .tl-s.done .tl-l, .tl-s.cur .tl-l { color: var(--text); font-weight: 700; }
+
+        .map-card { background: var(--card); border-radius: var(--r); padding: .8rem; box-shadow: 0 2px 12px rgba(0,0,0,.04); margin-bottom: .8rem; }
+        .map-hd { display:flex; justify-content:space-between; align-items:center; padding-bottom: .6rem; border-bottom:1px solid var(--border); margin-bottom: .6rem; }
+        .rider-inf { display:flex; align-items:center; gap: .6rem; opacity: .3; transition: .4s; }
+        .rider-inf.on { opacity: 1; }
+        .rider-av { width: 40px; height: 40px; background: #eee; border-radius: 50%; display:flex; align-items:center; justify-content:center; font-size: 1.3rem; }
+        .rider-meta h4 { font-size: .9rem; letter-spacing: .03em; }
+        .rider-meta p { font-size: .75rem; color: #999; }
+        .map-wrap { position:relative; width:100%; height: 400px; border-radius: 10px; overflow:hidden; background: #f8f9fa; }
+        #trackMap { width:100%; height:100%; }
+        .map-mask { position:absolute; inset:0; background:rgba(255,255,255,.94); display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:10; transition:opacity .5s; }
+        .map-mask.off { opacity:0; pointer-events:none; }
+        .spin { width:38px; height:38px; border:4px solid #eee; border-top-color:var(--primary); border-radius:50%; animation:spin .8s linear infinite; margin-bottom:.8rem; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+
+        .legend { position:absolute; top:8px; left:8px; background:rgba(255,255,255,.9); border-radius:8px; padding:5px 10px; font-size:.68rem; z-index:5; display:flex; flex-direction:column; gap:2px; box-shadow:0 2px 6px rgba(0,0,0,.04); }
+        .ld { width:8px; height:8px; border-radius:50%; display:inline-block; }
+        .ld-p { background:var(--primary); } .ld-d { background:var(--teal); } .ld-r { background:#f39c12; animation:pulse-dot 1s infinite; }
+
+        .eta-bar { position:absolute; bottom:8px; left:8px; right:8px; background:rgba(255,255,255,.95); border-radius:10px; padding:10px 14px; z-index:5; box-shadow:0 3px 12px rgba(0,0,0,.07); display:none; align-items:center; gap:10px; }
+        .eta-bar.on { display:flex; }
+        .eta-av { width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,var(--teal),#3cb8b0); display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0; }
+        .eta-info { flex:1; } .eta-info h4 { font-size:.83rem; } .eta-info p { font-size:.73rem; color:#888; }
+        .eta-t { font-size:1.15rem; font-weight:800; color:var(--primary); white-space:nowrap; }
+
+        .btns { display:flex; gap:.7rem; margin-top:.8rem; }
+        .btn { flex:1; padding:.85rem; border:none; border-radius:24px; font-size:.9rem; font-weight:700; cursor:pointer; text-align:center; text-decoration:none; letter-spacing:.03em; transition:all .2s; }
+        .btn:active { transform:scale(.96); }
+        .btn-outline { background:#eee; color:#666; }
+        .btn-teal { background:var(--teal); color:#fff; }
+        .btn-primary { background:linear-gradient(135deg,#ff6b6b,#e55a5a); color:#fff; box-shadow:0 4px 14px rgba(255,107,107,.3); }
+        .btn:disabled { opacity:.3 !important; pointer-events:none !important; cursor:not-allowed !important; }
+
+        .modal { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:9999; display:none; justify-content:center; align-items:center; backdrop-filter:blur(4px); }
+        .modal.show { display:flex; }
+        .modal-inner { background:#fff; border-radius:20px; padding:2.2rem 1.8rem; text-align:center; max-width:380px; width:90%; box-shadow:0 20px 50px rgba(0,0,0,.2); }
+        .modal-inner .mi { font-size:3.2rem; margin-bottom:.6rem; }
+        .modal-inner h3 { font-size:1.2rem; margin-bottom:.4rem; letter-spacing:.04em; }
+        .modal-inner p { color:#888; font-size:.85rem; margin-bottom:1.1rem; letter-spacing:.03em; line-height:1.6; }
+        .modal-inner .btn { width:100%; margin-bottom:5px; }
+        .btn-ghost { background:transparent !important; color:#999 !important; box-shadow:none !important; font-weight:500; }
+
+        .toast { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,.82); color:#fff; padding:14px 28px; border-radius:28px; font-size:.88rem; z-index:10000; pointer-events:none; opacity:0; transition:opacity .3s; letter-spacing:.03em; }
+        .toast.show { opacity:1; }
+        .hint { position:fixed; bottom:70px; right:10px; font-size:.62rem; color:#ccc; z-index:150; text-align:right; line-height:1.5; }
+        .hint kbd { background:#eee; padding:1px 5px; border-radius:3px; font-family:inherit; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <nav>
+            <div class="logo" onclick="location.href='index.html'">极速跑腿</div>
+            <span class="badge b-pending" id="badge">⏳ 等待接单</span>
+        </nav>
+    </header>
+
+    <div class="modal" id="modal">
+        <div class="modal-inner">
+            <div class="mi">🎁</div>
+            <h3>确认收货</h3>
+            <p id="modalText">请确认已收到物品，确认后款项将结算给骑手。</p>
+            <button class="btn btn-teal" id="modalConfirmBtn" onclick="doConfirm()">✅ 确认无误，打款给骑手</button>
+            <button class="btn btn-ghost" onclick="closeModal()">再等等</button>
+        </div>
+    </div>
+
+    <main class="main">
+        <div class="status-card">
+            <h2 id="statusTitle">正在呼叫骑手...</h2>
+            <p class="desc" id="statusDesc">订单已发布，系统正在为您匹配校内最快兼职骑手</p>
+            <div class="tl">
+                <div class="tl-s done" id="s1"><div class="tl-d">✓</div><div class="tl-l">已下单</div></div>
+                <div class="tl-s" id="s2"><div class="tl-d">📦</div><div class="tl-l">骑手取货</div></div>
+                <div class="tl-s" id="s3"><div class="tl-d">🛵</div><div class="tl-l">配送中</div></div>
+                <div class="tl-s" id="s4"><div class="tl-d">✅</div><div class="tl-l">已送达</div></div>
+            </div>
+        </div>
+
+        <div class="map-card">
+            <div class="map-hd">
+                <div class="rider-inf" id="riderInf">
+                    <div class="rider-av">🚴‍♂️</div>
+                    <div class="rider-meta">
+                        <h4 id="riderName">等待分配骑手...</h4>
+                        <p id="riderDist">暂无距离信息</p>
+                    </div>
+                </div>
+                <div style="font-size:.84rem;color:var(--primary);font-weight:700;" id="etaDisp">--</div>
+            </div>
+            <div class="map-wrap">
+                <div class="map-mask" id="mapMask">
+                    <div class="spin"></div>
+                    <h3 style="color:#333;margin-bottom:.4rem;" id="maskTitle">等待骑手接单中...</h3>
+                    <p style="color:#999;font-size:.82rem;" id="maskHint">前往 runner.html 抢单，或按 Ctrl+F 模拟接单</p>
+                </div>
+                <div id="trackMap"></div>
+                <div class="legend">
+                    <span><span class="ld ld-p"></span> 取货点</span>
+                    <span><span class="ld ld-d"></span> 收货点</span>
+                    <span><span class="ld ld-r"></span> 骑手位置</span>
+                </div>
+                <div class="eta-bar" id="etaBar">
+                    <div class="eta-av">🛵</div>
+                    <div class="eta-info">
+                        <h4 id="etaRName">张同学（校内骑手）</h4>
+                        <p id="etaDist">距离约 800 米</p>
+                    </div>
+                    <div class="eta-t" id="etaTime">约 8 分钟</div>
+                </div>
+            </div>
+            <div class="btns">
+                <a href="index.html" class="btn btn-outline">返回首页</a>
+                <button class="btn btn-teal" id="contactBtn" onclick="toast('📞 正在呼叫骑手...')" disabled>联系骑手</button>
+                <button class="btn btn-primary" id="confirmBtn" onclick="showModal()" disabled>确认收货</button>
+            </div>
+        </div>
+    </main>
+
+    <div class="hint">按 <kbd>Ctrl+F</kbd> 模拟骑手接单</div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+        /* ========== 工具函数 ========== */
+        function getOrder() {
+            try { const r = localStorage.getItem('current_running_order'); return r ? JSON.parse(r) : null; }
+            catch(e) { return null; }
+        }
+        function saveOrder(o) { localStorage.setItem('current_running_order', JSON.stringify(o)); }
+        function $(id) { return document.getElementById(id); }
+        function toast(msg) {
+            const t = $('toast'); t.textContent = msg; t.classList.add('show');
+            clearTimeout(t._tid); t._tid = setTimeout(() => t.classList.remove('show'), 2000);
+        }
+
+        /* ========== 路径生成（弯曲偏移） ========== */
+        function genRoute(from, to) {
+            const pts = [[from.lng, from.lat]];
+            const dLng = to.lng - from.lng, dLat = to.lat - from.lat;
+            const dist = Math.sqrt(dLng*dLng + dLat*dLat);
+            if (dist < 0.0006) { pts.push([to.lng, to.lat]); return pts; }
+            const segs = 3 + Math.floor(dist * 6000);
+            const pLng = -dLat / dist, pLat = dLng / dist;
+            for (let i = 1; i <= segs; i++) {
+                const t = i / (segs + 1);
+                const off = Math.sin(t * Math.PI * 2.3) * 0.0003 + Math.sin(t * 17.3) * 0.00008;
+                pts.push([from.lng + dLng*t + pLng*off, from.lat + dLat*t + pLat*off]);
+            }
+            pts.push([to.lng, to.lat]);
+            return pts;
+        }
+        function posOnPath(pts, prog) {
+            if (prog <= 0) return pts[0]; if (prog >= 1) return pts[pts.length-1];
+            const segs = []; let tot = 0;
+            for (let i = 1; i < pts.length; i++) {
+                const len = Math.sqrt(Math.pow(pts[i][0]-pts[i-1][0],2) + Math.pow(pts[i][1]-pts[i-1][1],2));
+                segs.push(len); tot += len;
+            }
+            const target = prog * tot; let acc = 0;
+            for (let i = 0; i < segs.length; i++) {
+                if (acc + segs[i] >= target) {
+                    const lt = (target - acc) / segs[i];
+                    return [pts[i][0] + (pts[i+1][0]-pts[i][0])*lt, pts[i][1] + (pts[i+1][1]-pts[i][1])*lt];
+                }
+                acc += segs[i];
+            }
+            return pts[pts.length-1];
+        }
+
+        /* ========== 地图 ========== */
+        let trackMap, routePath = [], animTimer = null, animProg = 0;
+        let pMarker, dMarker, rMarker, rLine;
+        let pickupCoord, deliveryCoord;
+
+        function initMap() {
+            const order = getOrder();
+            if (!order) { $('maskTitle').textContent = '暂无活跃订单'; $('maskHint').textContent = '请返回首页下单'; return; }
+
+            pickupCoord = order.startCoord || { lat: 30.575, lng: 114.331 };
+            deliveryCoord = order.endCoord || { lat: 30.574, lng: 114.334 };
+            routePath = genRoute(pickupCoord, deliveryCoord);
+
+            const c = [(pickupCoord.lng + deliveryCoord.lng)/2, (pickupCoord.lat + deliveryCoord.lat)/2];
+            trackMap = new AMap.Map('trackMap', { center: c, zoom: 15, mapStyle: 'amap://styles/light' });
+
+            rLine = new AMap.Polyline({ path: routePath, strokeColor: '#ff6b6b', strokeWeight: 6, strokeOpacity: .8, lineJoin: 'round', lineCap: 'round', showDir: true });
+            rLine.setMap(trackMap);
+
+            pMarker = new AMap.Marker({
+                position: [pickupCoord.lng, pickupCoord.lat],
+                icon: new AMap.Icon({ size: new AMap.Size(36,48), imageSize: new AMap.Size(36,48),
+                    image: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="48"><circle cx="18" cy="15" r="13" fill="#ff6b6b" stroke="#fff" stroke-width="2.5"/><text x="18" y="20" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">取</text><polygon points="18,44 12,30 24,30" fill="#ff6b6b"/></svg>')
+                }), anchor: 'bottom-center', zIndex: 100,
+            });
+            pMarker.setMap(trackMap);
+
+            dMarker = new AMap.Marker({
+                position: [deliveryCoord.lng, deliveryCoord.lat],
+                icon: new AMap.Icon({ size: new AMap.Size(36,48), imageSize: new AMap.Size(36,48),
+                    image: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="48"><circle cx="18" cy="15" r="13" fill="#4ecdc4" stroke="#fff" stroke-width="2.5"/><text x="18" y="20" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">收</text><polygon points="18,44 12,30 24,30" fill="#4ecdc4"/></svg>')
+                }), anchor: 'bottom-center', zIndex: 100,
+            });
+            dMarker.setMap(trackMap);
+
+            rMarker = new AMap.Marker({
+                position: routePath[0],
+                icon: new AMap.Icon({ size: new AMap.Size(42,42), imageSize: new AMap.Size(42,42),
+                    image: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42"><circle cx="21" cy="21" r="17" fill="#f39c12" stroke="#fff" stroke-width="3"/><text x="21" y="27" text-anchor="middle" font-size="20">🛵</text></svg>')
+                }), anchor: 'center', zIndex: 200,
+            });
+            rMarker.setMap(trackMap);
+
+            trackMap.setFitView([pMarker, dMarker], false, [60,60,60,60]);
+            $('mapMask').classList.add('off');
+            refreshUI(order);
+            if (order.status === 'accepted') startAnim();
+            if (order.status === 'delivering') {
+                rMarker.setPosition(routePath[routePath.length-1]);
+                $('etaBar').classList.add('on');
+                $('etaTime').textContent = '已送达';
+                $('etaDist').textContent = '距离约 0 米';
+            }
+        }
+
+        /* ========== UI 刷新（核心：确保按钮状态正确） ========== */
+        function refreshUI(order) {
+            if (!order) return;
+            const badge = $('badge'), title = $('statusTitle'), desc = $('statusDesc');
+            const s2 = $('s2'), s3 = $('s3'), s4 = $('s4');
+            const riderInf = $('riderInf'), contactBtn = $('contactBtn'), confirmBtn = $('confirmBtn');
+
+            // 重置按钮
+            contactBtn.disabled = true;
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = '确认收货';
+
+            if (order.status === 'pending') {
+                badge.textContent = '⏳ 等待接单'; badge.className = 'badge b-pending';
+                title.textContent = '正在呼叫骑手...';
+                desc.textContent = '订单已发布，系统正在为您匹配校内最快兼职骑手';
+            } else if (order.status === 'accepted') {
+                badge.textContent = '🛵 骑手已接单'; badge.className = 'badge b-accepted';
+                title.textContent = '骑手已接单，正在配送';
+                desc.textContent = `骑手已前往「${order.startLoc}」取件，正送往「${order.endLoc}」`;
+                s2.classList.add('cur'); riderInf.classList.add('on');
+                $('riderName').textContent = '张同学（校内兼职骑手）';
+                $('etaBar').classList.add('on');
+                contactBtn.disabled = false;
+                confirmBtn.disabled = true; // 配送中不可确认
+            } else if (order.status === 'delivering') {
+                badge.textContent = '📍 已送达 · 待确认'; badge.className = 'badge b-delivering';
+                title.textContent = '骑手已送达，请确认收货';
+                desc.textContent = `物品已送至「${order.endLoc}」，请确认无误后点击下方按钮收货`;
+                s2.classList.remove('cur'); s2.classList.add('done'); s2.querySelector('.tl-d').textContent = '✓';
+                s3.classList.add('done'); s3.querySelector('.tl-d').textContent = '✓';
+                s4.classList.add('cur');
+                riderInf.classList.add('on');
+                $('riderName').textContent = '张同学（校内兼职骑手）';
+                $('riderDist').textContent = '距离您：0 米';
+                $('etaDisp').textContent = '已送达';
+                $('etaBar').classList.add('on');
+                $('etaTime').textContent = '已送达';
+                $('etaDist').textContent = '距离约 0 米';
+                contactBtn.disabled = false;
+                confirmBtn.disabled = false;
+            } else if (order.status === 'confirmed') {
+                badge.textContent = '✅ 已完成'; badge.className = 'badge b-done';
+                title.textContent = '订单已完成';
+                desc.textContent = '感谢使用极速跑腿，期待再次为您服务！';
+                [s2,s3,s4].forEach(p => { p.classList.add('done'); p.classList.remove('cur'); });
+                s2.querySelector('.tl-d').textContent = '✓'; s3.querySelector('.tl-d').textContent = '✓'; s4.querySelector('.tl-d').textContent = '✓';
+                confirmBtn.textContent = '✅ 已完成';
+            }
+        }
+
+        /* ========== 骑手动画 ========== */
+        function startAnim() {
+            const total = 280; let step = 0; animProg = 0;
+            animTimer = setInterval(() => {
+                step++;
+                if (step > total) {
+                    clearInterval(animTimer); animProg = 1;
+                    if (rMarker) rMarker.setPosition(routePath[routePath.length-1]);
+                    $('riderDist').textContent = '距离您：0 米';
+                    $('etaDisp').textContent = '等待骑手确认';
+                    $('etaTime').textContent = '等待确认';
+                    $('etaDist').textContent = '骑手即将确认送达';
+                    $('statusDesc').textContent = '骑手已到达，请等待骑手在骑手端点击「确认送达」';
+                    return;
+                }
+                animProg = step / total;
+                const pos = posOnPath(routePath, animProg);
+                if (rMarker) rMarker.setPosition(pos);
+                const rem = 1 - animProg;
+                $('riderDist').textContent = `距离您：约 ${Math.round(1000*rem)} 米`;
+                $('etaDisp').textContent = Math.ceil(10*rem) > 0 ? `预计 ${Math.ceil(10*rem)} 分钟` : '即将到达';
+                $('etaDist').textContent = `距离约 ${Math.round(1000*rem)} 米`;
+                $('etaTime').textContent = Math.ceil(10*rem) > 0 ? `约 ${Math.ceil(10*rem)} 分钟` : '即将到达';
+            }, 60);
+        }
+
+        /* ========== 确认收货流程 ========== */
+        function showModal() {
+            const order = getOrder();
+            if (!order) { toast('⚠️ 未找到订单，请刷新页面'); return; }
+            if (order.status !== 'delivering') {
+                toast('⚠️ 骑手尚未确认送达，请耐心等待');
+                return;
+            }
+            $('modalText').textContent = `实付金额 ¥ ${order.totalPay}，确认后 ¥ ${order.riderFee} 将结算给骑手。`;
+            $('modal').classList.add('show');
+        }
+        function closeModal() { $('modal').classList.remove('show'); }
+
+        function doConfirm() {
+            const order = getOrder();
+            if (!order) { toast('❌ 确认失败：未找到订单'); return; }
+            if (order.status !== 'delivering') { toast('❌ 订单状态异常，请刷新页面'); closeModal(); return; }
+
+            const earn = parseFloat(order.riderFee) || 0;
+            const curWallet = parseFloat(localStorage.getItem('runner_wallet_balance') || '0');
+            const newWallet = curWallet + earn;
+
+            // 结算
+            localStorage.setItem('runner_wallet_balance', newWallet.toFixed(2));
+            order.status = 'confirmed';
+            order.commissionReceived = earn.toFixed(2);
+            order.confirmedAt = new Date().toISOString();
+            saveOrder(order);
+
+            // 更新统计
+            const totalOrd = parseInt(localStorage.getItem('runner_total_orders') || '0');
+            localStorage.setItem('runner_total_orders', totalOrd + 1);
+
+            // 添加到骑手历史
+            const hist = JSON.parse(localStorage.getItem('runner_order_history') || '[]');
+            hist.push({ title: order.title, startLoc: order.startLoc, endLoc: order.endLoc, earned: earn.toFixed(2), date: new Date().toLocaleDateString('zh-CN') });
+            localStorage.setItem('runner_order_history', JSON.stringify(hist));
+
+            closeModal();
+            if (animTimer) clearInterval(animTimer);
+            refreshUI(order);
+            toast(`🎉 收货成功！¥ ${earn.toFixed(2)} 已存入骑手钱包`);
+            setTimeout(() => { location.href = 'index.html'; }, 2200);
+        }
+
+        /* ========== 模拟接单 ========== */
+        window.forceAccept = function() {
+            const order = getOrder();
+            if (!order) { toast('⚠️ 请先下单'); return; }
+            if (order.status !== 'pending') { toast('⚠️ 当前状态不支持模拟接单'); return; }
+            order.status = 'accepted'; order.acceptedAt = new Date().toISOString();
+            saveOrder(order);
+            if (rMarker && routePath.length > 0) rMarker.setPosition(routePath[0]);
+            refreshUI(order); startAnim();
+            toast('✅ 模拟接单成功！骑手已出发');
+        };
+
+        /* ========== 状态轮询 ========== */
+        let lastStatus = null;
+        function pollStatus() {
+            const order = getOrder();
+            if (!order) return;
+            if (order.status !== lastStatus) {
+                const prev = lastStatus;
+                lastStatus = order.status;
+                // 从 accepted → delivering：骑手点了确认送达
+                if (order.status === 'delivering' && prev === 'accepted') {
+                    if (animTimer) clearInterval(animTimer);
+                    if (rMarker && routePath.length > 0) rMarker.setPosition(routePath[routePath.length-1]);
+                    refreshUI(order);
+                    toast('📍 骑手已确认送达，请确认收货');
+                }
+                // 其他状态变化也刷新
+                if (prev !== null) refreshUI(order);
+            }
+        }
+
+        /* ========== 启动 ========== */
+        window.onload = function() {
+            const order = getOrder();
+            if (!order) {
+                $('statusTitle').textContent = '无活跃订单';
+                $('statusDesc').textContent = '请先返回首页下单';
+                $('maskTitle').textContent = '暂无订单';
+                $('maskHint').textContent = '请返回首页下单';
+                return;
+            }
+            lastStatus = order.status;
+            refreshUI(order);
+            initMap();
+            setInterval(pollStatus, 1200);
+        };
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'f' && e.ctrlKey) { e.preventDefault(); window.forceAccept(); }
+        });
+    </script>
+</body>
+</html>

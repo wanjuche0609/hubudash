@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发布跑腿订单 - 极速跑腿</title>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=ee82dda67edc76f0892db73c002cdbd0&plugin=AMap.PlaceSearch,AMap.Geocoder,AMap.AutoComplete"></script>
+    <style>
+        :root { --primary: #ff6b6b; --teal: #4ecdc4; --bg: #f5f6f8; --card: #fff; --text: #1a1a2e; --sub: #6b7280; --border: #e5e7eb; --r: 16px; --rs: 10px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg); color: var(--text);
+            -webkit-font-smoothing: antialiased;
+            letter-spacing: .025em; line-height: 1.65;
+            padding-bottom: 110px;
+        }
+
+        /* 顶部 */
+        .top-bar {
+            background: linear-gradient(135deg, #ff6b6b, #e55a5a);
+            padding: 15px 5%; color: #fff;
+            display: flex; align-items: center; gap: 16px;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .top-bar a { color: #fff; text-decoration: none; font-size: 1.35rem; }
+        .top-bar h2 { font-size: 1.1rem; font-weight: 700; letter-spacing: .04em; }
+
+        /* 地图卡片 */
+        .map-card {
+            background: var(--card); margin: 14px 5%; border-radius: var(--r);
+            overflow: hidden; box-shadow: 0 2px 14px rgba(0,0,0,.04);
+        }
+        .map-card-hd {
+            padding: 12px 18px; font-size: .88rem; font-weight: 700;
+            border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            letter-spacing: .03em;
+        }
+        .map-mode-tag {
+            font-size: .76rem; padding: 4px 12px; border-radius: 12px;
+            cursor: pointer; font-weight: 600; letter-spacing: .03em;
+            background: #fff0f0; color: var(--primary);
+        }
+        #mapContainer { width: 100%; height: 320px; position: relative; }
+        .map-pin {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -100%);
+            font-size: 34px; z-index: 10; pointer-events: none;
+            filter: drop-shadow(0 3px 6px rgba(0,0,0,.3));
+        }
+        .map-hint {
+            position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,.7); color: #fff; font-size: .73rem;
+            padding: 5px 14px; border-radius: 14px; z-index: 10; pointer-events: none;
+            letter-spacing: .03em;
+        }
+
+        /* 地址搜索 */
+        .addr-section { margin: 14px 5%; display: flex; flex-direction: column; gap: 10px; }
+        .addr-row { display: flex; align-items: stretch; gap: 8px; }
+        .addr-col { flex: 1; position: relative; }
+        .addr-col label { display: block; font-size: .76rem; font-weight: 700; margin-bottom: 5px; letter-spacing: .04em; }
+        .addr-col label.pu { color: var(--primary); }
+        .addr-col label.de { color: var(--teal); }
+        .addr-col input {
+            width: 100%; padding: 12px 14px;
+            border: 2px solid var(--border); border-radius: var(--rs);
+            font-size: .9rem; outline: none; background: #fff;
+            transition: border .2s; letter-spacing: .03em;
+        }
+        .addr-col input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(255,107,107,.07);
+        }
+        .swap-btn {
+            width: 38px; min-width: 38px; height: 38px; margin-top: 22px;
+            border-radius: 50%; background: #f5f6f8; border: 2px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 1.1rem; transition: all .3s; color: #666;
+        }
+        .swap-btn:active { transform: rotate(180deg); background: #fff0f0; border-color: var(--primary); }
+
+        /* 搜索下拉 */
+        .dropdown {
+            position: absolute; top: 100%; left: 0; right: 0;
+            background: #fff; border: 1px solid var(--border);
+            border-radius: 0 0 var(--rs) var(--rs);
+            box-shadow: 0 8px 24px rgba(0,0,0,.1);
+            z-index: 50; max-height: 260px; overflow-y: auto; display: none;
+        }
+        .dropdown.show { display: block; }
+        .dropdown .item {
+            padding: 12px 16px; cursor: pointer; font-size: .86rem;
+            border-bottom: 1px solid #f5f5f5; letter-spacing: .03em;
+            transition: background .15s;
+        }
+        .dropdown .item:last-child { border-bottom: none; }
+        .dropdown .item:hover, .dropdown .item.active { background: #fff5f5; color: var(--primary); font-weight: 600; }
+        .dropdown .item .sub { font-size: .73rem; color: #999; margin-top: 2px; }
+
+        /* 表单卡片 */
+        .form-card {
+            background: var(--card); margin: 0 5% 14px; border-radius: var(--r);
+            padding: 22px 20px; box-shadow: 0 2px 12px rgba(0,0,0,.03);
+        }
+        .form-card .sect { font-size: .98rem; font-weight: 700; margin-bottom: 18px; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
+        .fg { margin-bottom: 18px; }
+        .fg:last-child { margin-bottom: 0; }
+        .fg label { display: block; font-size: .8rem; font-weight: 700; color: var(--sub); margin-bottom: 7px; letter-spacing: .03em; }
+        .fg input, .fg textarea, .fg select {
+            width: 100%; padding: 12px 14px; border: 2px solid var(--border);
+            border-radius: var(--rs); font-size: .9rem; outline: none;
+            background: #fafafa; transition: all .2s; font-family: inherit; letter-spacing: .03em;
+        }
+        .fg input:focus, .fg textarea:focus, .fg select:focus {
+            border-color: var(--primary); background: #fff;
+            box-shadow: 0 0 0 3px rgba(255,107,107,.05);
+        }
+        .fg textarea { resize: vertical; min-height: 80px; line-height: 1.7; }
+        .notice {
+            background: #fff9ea; color: #8b6914; padding: 12px 16px;
+            border-radius: var(--rs); font-size: .8rem; margin-bottom: 16px;
+            display: none; letter-spacing: .03em; line-height: 1.6;
+        }
+        .notice.show { display: block; }
+        .time-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+        .time-chip {
+            padding: 8px 18px; border-radius: 20px; border: 2px solid var(--border);
+            background: #fff; font-size: .83rem; cursor: pointer; transition: all .2s;
+            letter-spacing: .03em; font-weight: 500;
+        }
+        .time-chip.sel { background: #fff0f0; border-color: var(--primary); color: var(--primary); font-weight: 700; }
+
+        .dist-bar {
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 16px; background: #f9fafb; border-radius: var(--rs); margin-bottom: 16px;
+        }
+        .dist-bar .line { flex: 1; height: 5px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+        .dist-bar .fill { height: 100%; background: linear-gradient(90deg,var(--primary),var(--teal)); border-radius: 3px; transition: width .5s; }
+        .dist-bar .val { font-size: .88rem; font-weight: 700; color: var(--primary); white-space: nowrap; letter-spacing: .03em; }
+
+        .price-card { background: linear-gradient(135deg,#fff5f5,#fff); border: 1px solid #ffd5d5; border-radius: var(--rs); padding: 18px; }
+        .pr { display: flex; justify-content: space-between; font-size: .86rem; color: #666; margin-bottom: 8px; letter-spacing: .03em; }
+        .pr.tt { font-size: 1.15rem; font-weight: 800; color: var(--primary); border-top: 1px dashed #ffd5d5; padding-top: 12px; margin-top: 10px; margin-bottom: 0; letter-spacing: .04em; }
+
+        .submit-bar {
+            position: fixed; bottom: 0; left: 0; right: 0; background: #fff;
+            padding: 12px 5%; border-top: 1px solid var(--border);
+            display: flex; gap: 14px; align-items: center; z-index: 200;
+            box-shadow: 0 -2px 12px rgba(0,0,0,.04);
+        }
+        .submit-bar .pl { font-size: .68rem; color: #999; letter-spacing: .04em; }
+        .submit-bar .pn { font-size: 1.55rem; font-weight: 800; color: var(--primary); }
+        .submit-btn {
+            flex: 1; padding: 15px; background: linear-gradient(135deg,#ff6b6b,#e55a5a);
+            color: #fff; border: none; border-radius: 28px;
+            font-size: 1.02rem; font-weight: 700; cursor: pointer;
+            box-shadow: 0 6px 20px rgba(255,107,107,.3);
+            transition: all .2s; letter-spacing: .05em;
+        }
+        .submit-btn:active { transform: scale(.96); opacity: .9; }
+        .back-link { display: block; text-align: center; margin: 12px 0 20px; color: #999; text-decoration: none; font-size: .83rem; letter-spacing: .03em; }
+
+        .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,.82); color: #fff; padding: 14px 28px; border-radius: 28px; font-size: .88rem; z-index: 999; pointer-events: none; opacity: 0; transition: opacity .3s; letter-spacing: .03em; }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <a href="index.html">←</a>
+        <h2 id="pageTitle">发布跑腿任务</h2>
+    </div>
+
+    <!-- 地图 -->
+    <div class="map-card">
+        <div class="map-card-hd">
+            📍 点击地图选点 · 或搜索地址 <span id="modeLabel" class="map-mode-tag" onclick="toggleMode()">取货地点</span>
+        </div>
+        <div id="mapContainer">
+            <div class="map-pin">📌</div>
+            <div class="map-hint">点击地图选点 · 输入地址搜索</div>
+        </div>
+    </div>
+
+    <!-- 地址搜索 -->
+    <div class="addr-section">
+        <div class="addr-row">
+            <div class="addr-col">
+                <label class="pu">● 取货地点</label>
+                <input type="text" id="pickupInput" placeholder="输入地址搜索，如「湖北大学」" autocomplete="off">
+                <div class="dropdown" id="puDropdown"></div>
+            </div>
+            <button class="swap-btn" onclick="swapAddrs()" title="交换地址">⇅</button>
+            <div class="addr-col">
+                <label class="de">● 收货地点</label>
+                <input type="text" id="deliveryInput" placeholder="输入地址搜索，如「湖北大学」" autocomplete="off">
+                <div class="dropdown" id="deDropdown"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 表单 -->
+    <div class="form-card">
+        <div class="sect">📋 任务详情</div>
+        <div id="dynamicFields"></div>
+        <div class="notice" id="specialNotice"></div>
+        <div class="fg">
+            <label>⏱ 期望送达时间</label>
+            <div class="time-chips">
+                <span class="time-chip sel" onclick="pickTime(this,'now')">⚡ 尽快送达</span>
+                <span class="time-chip" onclick="pickTime(this,'30min')">🕐 30 分钟内</span>
+                <span class="time-chip" onclick="pickTime(this,'1h')">🕑 1 小时内</span>
+            </div>
+        </div>
+        <div class="fg">
+            <label>📝 详细地址与备注（房间号、联系方式补充等）</label>
+            <textarea id="detailsInput" placeholder="例如：二期学生公寓 C 栋 302 室，放门口鞋柜上即可，谢谢！"></textarea>
+        </div>
+        <div class="fg">
+            <label>📱 联系电话</label>
+            <input type="tel" id="phoneInput" placeholder="请输入 11 位手机号码" required>
+        </div>
+        <div class="fg">
+            <label>💰 小费（选填，激励骑手更快接单）</label>
+            <select id="tipSelect">
+                <option value="0">不添加小费</option>
+                <option value="1">¥ 1.00 感谢小费</option>
+                <option value="2">¥ 2.00 加急小费</option>
+                <option value="5">¥ 5.00 重赏小费</option>
+            </select>
+        </div>
+
+        <div class="sect" style="margin-top:8px;">📏 路线估算</div>
+        <div class="dist-bar">
+            <span style="font-size:.78rem;color:#999;white-space:nowrap;" id="distFrom">取货点</span>
+            <div class="line"><div class="fill" id="distFill" style="width:20%;"></div></div>
+            <span class="val" id="distValue">~ 0.3 km</span>
+        </div>
+        <div class="price-card">
+            <div class="pr"><span>基础服务费</span><span>¥ <b id="baseFee">0.00</b></span></div>
+            <div class="pr"><span>距离加价（路径偏移计算）</span><span>¥ <b id="distFee">0.00</b></span></div>
+            <div class="pr" id="depositRow" style="display:none;"><span>代购押金（可退）</span><span>¥ <b>50.00</b></span></div>
+            <div class="pr"><span>小费</span><span>¥ <b id="tipFeeDisp">0.00</b></span></div>
+            <div class="pr tt"><span>合计</span><span>¥ <b id="totalFeeDisp">0.00</b></span></div>
+        </div>
+    </div>
+
+    <!-- 底部 -->
+    <div class="submit-bar">
+        <div>
+            <div class="pl">预估费用</div>
+            <div class="pn">¥ <span id="bottomTotal">0.00</span></div>
+        </div>
+        <button class="submit-btn" onclick="doSubmit()">🚀 确认发布</button>
+    </div>
+    <a href="index.html" class="back-link">← 返回首页重新选择</a>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const params = new URLSearchParams(location.search);
+        const taskType = params.get('type') || 'express';
+
+        // ===== 状态 =====
+        let editMode = 'pickup';
+        let pickupCoord = { lat: 30.5751, lng: 114.3308 };
+        let deliveryCoord = { lat: 30.5736, lng: 114.3337 };
+        let map = null, placeSearch = null, autoComplete = null;
+        let routeLine = null, puMarker = null, deMarker = null;
+        let curDistKm = 0.35;
+
+        // ===== 地图初始化 =====
+        function initMap() {
+            const center = [(pickupCoord.lng + deliveryCoord.lng) / 2, (pickupCoord.lat + deliveryCoord.lat) / 2];
+            map = new AMap.Map('mapContainer', { center: center, zoom: 15, mapStyle: 'amap://styles/light' });
+
+            // 点击地图 → 选点 + 搜索最近POI自动填入
+            map.on('click', function(e) {
+                const coord = { lat: e.lnglat.lat, lng: e.lnglat.lng };
+                if (editMode === 'pickup') { pickupCoord = coord; } else { deliveryCoord = coord; }
+                updateMap();
+                fillNearestPOI(e.lnglat, editMode);
+            });
+
+            // 初始化搜索插件
+            AMap.plugin(['AMap.PlaceSearch', 'AMap.AutoComplete'], function() {
+                placeSearch = new AMap.PlaceSearch({
+                    pageSize: 10,
+                    pageIndex: 1,
+                    extensions: 'all',
+                });
+                autoComplete = new AMap.AutoComplete({
+                    city: '武汉',
+                    citylimit: true,
+                });
+            });
+
+            updateMap();
+        }
+
+        // 地图点击 → 搜索最近 POI → 自动填入
+        function fillNearestPOI(lnglat, mode) {
+            if (!placeSearch) {
+                // 降级：仅反向地理编码
+                fallbackReverseGeo(lnglat, mode);
+                return;
+            }
+            placeSearch.searchNearBy('', lnglat, 200, function(status, result) {
+                const input = document.getElementById(mode === 'pickup' ? 'pickupInput' : 'deliveryInput');
+                if (status === 'complete' && result.poiList && result.poiList.pois.length > 0) {
+                    // 找到最近 POI，填入其名称
+                    const nearest = result.poiList.pois[0];
+                    input.value = nearest.name;
+                } else {
+                    // 200m 内无 POI，降级到反向地理编码
+                    AMap.plugin('AMap.Geocoder', function() {
+                        const geocoder = new AMap.Geocoder();
+                        geocoder.getAddress(lnglat, function(s, r) {
+                            if (s === 'complete' && r.regeocode) {
+                                const addr = r.regeocode.formattedAddress || '';
+                                input.value = addr.replace(/^湖北省武汉市武昌区/, '').replace(/^湖北省武汉市/, '');
+                            }
+                        });
+                    });
+                }
+            });
+        }
+        function fallbackReverseGeo(lnglat, mode) {
+            AMap.plugin('AMap.Geocoder', function() {
+                const geocoder = new AMap.Geocoder();
+                geocoder.getAddress(lnglat, function(status, result) {
+                    if (status === 'complete' && result.regeocode) {
+                        const addr = result.regeocode.formattedAddress || '';
+                        const input = document.getElementById(mode === 'pickup' ? 'pickupInput' : 'deliveryInput');
+                        input.value = addr.replace(/^湖北省武汉市武昌区/, '').replace(/^湖北省武汉市/, '');
+                    }
+                });
+            });
+        }
+
+        function updateMap() {
+            if (!map) return;
+            if (routeLine) { map.remove(routeLine); routeLine = null; }
+            if (puMarker) { map.remove(puMarker); puMarker = null; }
+            if (deMarker) { map.remove(deMarker); deMarker = null; }
+
+            const from = [pickupCoord.lng, pickupCoord.lat];
+            const to = [deliveryCoord.lng, deliveryCoord.lat];
+
+            puMarker = new AMap.Marker({
+                position: from,
+                icon: new AMap.Icon({ size: new AMap.Size(36,48), imageSize: new AMap.Size(36,48),
+                    image: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="48"><circle cx="18" cy="15" r="13" fill="#ff6b6b" stroke="#fff" stroke-width="2.5"/><text x="18" y="20" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">取</text><polygon points="18,44 12,30 24,30" fill="#ff6b6b"/></svg>'),
+                }), anchor: 'bottom-center', zIndex: 100,
+            });
+            puMarker.setMap(map);
+            puMarker.setLabel({ content: '取货点', direction: 'top', offset: new AMap.Pixel(0, -10) });
+
+            deMarker = new AMap.Marker({
+                position: to,
+                icon: new AMap.Icon({ size: new AMap.Size(36,48), imageSize: new AMap.Size(36,48),
+                    image: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="48"><circle cx="18" cy="15" r="13" fill="#4ecdc4" stroke="#fff" stroke-width="2.5"/><text x="18" y="20" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">收</text><polygon points="18,44 12,30 24,30" fill="#4ecdc4"/></svg>'),
+                }), anchor: 'bottom-center', zIndex: 100,
+            });
+            deMarker.setMap(map);
+            deMarker.setLabel({ content: '收货点', direction: 'top', offset: new AMap.Pixel(0, -10) });
+
+            const route = genRoute(pickupCoord, deliveryCoord);
+            routeLine = new AMap.Polyline({ path: route, strokeColor: '#ff6b6b', strokeWeight: 6, strokeOpacity: .8, lineJoin: 'round', lineCap: 'round', showDir: true });
+            routeLine.setMap(map);
+
+            curDistKm = calcDist(route);
+            updateDist(curDistKm);
+            map.setFitView([puMarker, deMarker], false, [80,80,80,80]);
+        }
+
+        function genRoute(from, to) {
+            const pts = [[from.lng, from.lat]];
+            const dLng = to.lng - from.lng, dLat = to.lat - from.lat;
+            const dist = Math.sqrt(dLng*dLng + dLat*dLat);
+            if (dist < 0.0006) { pts.push([to.lng, to.lat]); return pts; }
+            const segs = 3 + Math.floor(dist * 6000);
+            const pLng = -dLat / dist, pLat = dLng / dist;
+            for (let i = 1; i <= segs; i++) {
+                const t = i / (segs + 1);
+                const off = Math.sin(t * Math.PI * 2.3) * 0.0003 + Math.sin(t * 17.3) * 0.00008;
+                pts.push([from.lng + dLng*t + pLng*off, from.lat + dLat*t + pLat*off]);
+            }
+            pts.push([to.lng, to.lat]);
+            return pts;
+        }
+        function calcDist(pts) {
+            let s = 0;
+            for (let i = 1; i < pts.length; i++) {
+                s += Math.sqrt(Math.pow(pts[i][0]-pts[i-1][0],2) + Math.pow(pts[i][1]-pts[i-1][1],2));
+            }
+            return s * 111;
+        }
+        function updateDist(km) {
+            curDistKm = km;
+            document.getElementById('distFill').style.width = Math.max(6, Math.min(km/3*100, 100)) + '%';
+            document.getElementById('distValue').textContent = '~ ' + km.toFixed(2) + ' km';
+            document.getElementById('distFrom').textContent = (document.getElementById('pickupInput').value || '取货点').slice(0, 8);
+            calcPrice(km);
+        }
+
+        function toggleMode() {
+            editMode = editMode === 'pickup' ? 'delivery' : 'pickup';
+            const el = document.getElementById('modeLabel');
+            el.textContent = editMode === 'pickup' ? '取货地点' : '收货地点';
+            el.style.color = editMode === 'pickup' ? '#ff6b6b' : '#4ecdc4';
+            el.style.background = editMode === 'pickup' ? '#fff0f0' : '#e6faf8';
+        }
+
+        // ===== 搜索（AutoComplete + PlaceSearch 双引擎） =====
+        function setupSearch(inputId, dropdownId) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            let timer = null;
+
+            input.addEventListener('input', function() {
+                clearTimeout(timer);
+                const val = this.value.trim();
+                if (!val) { dropdown.classList.remove('show'); return; }
+
+                timer = setTimeout(() => {
+                    // 方案1：AutoComplete 输入提示
+                    if (autoComplete) {
+                        autoComplete.search(val, function(status, result) {
+                            if (status === 'complete' && result.tips && result.tips.length > 0) {
+                                const items = result.tips
+                                    .filter(t => t.location && t.name)
+                                    .slice(0, 8)
+                                    .map(t => `
+                                        <div class="item" onclick="selectAddr('${inputId}', ${t.location.lat}, ${t.location.lng}, '${t.name.replace(/'/g, "\\'")}')">
+                                            <div>📍 ${t.name}</div>
+                                            <div class="sub">${t.district || ''} ${t.address || ''}</div>
+                                        </div>
+                                    `).join('');
+                                if (items) {
+                                    dropdown.innerHTML = items;
+                                    dropdown.classList.add('show');
+                                    return;
+                                }
+                            }
+                            // 方案1无结果 → 方案2：PlaceSearch 全文搜索
+                            if (placeSearch) {
+                                placeSearch.search(val, function(s, r) {
+                                    if (s === 'complete' && r.poiList && r.poiList.pois.length > 0) {
+                                        const items = r.poiList.pois.slice(0, 8).map(p => `
+                                            <div class="item" onclick="selectAddr('${inputId}', ${p.location.lat}, ${p.location.lng}, '${p.name.replace(/'/g, "\\'")}')">
+                                                <div>📍 ${p.name}</div>
+                                                <div class="sub">${p.address || ''}</div>
+                                            </div>
+                                        `).join('');
+                                        dropdown.innerHTML = items;
+                                        dropdown.classList.add('show');
+                                    } else {
+                                        dropdown.classList.remove('show');
+                                    }
+                                });
+                            }
+                        });
+                    } else if (placeSearch) {
+                        placeSearch.search(val, function(s, r) {
+                            if (s === 'complete' && r.poiList && r.poiList.pois.length > 0) {
+                                const items = r.poiList.pois.slice(0, 8).map(p => `
+                                    <div class="item" onclick="selectAddr('${inputId}', ${p.location.lat}, ${p.location.lng}, '${p.name.replace(/'/g, "\\'")}')">
+                                        <div>📍 ${p.name}</div>
+                                        <div class="sub">${p.address || ''}</div>
+                                    </div>
+                                `).join('');
+                                dropdown.innerHTML = items;
+                                dropdown.classList.add('show');
+                            } else {
+                                dropdown.classList.remove('show');
+                            }
+                        });
+                    }
+                }, 200);
+            });
+
+            input.addEventListener('focus', function() {
+                if (this.value.trim() && dropdown.children.length > 0) dropdown.classList.add('show');
+            });
+            input.addEventListener('blur', function() {
+                setTimeout(() => dropdown.classList.remove('show'), 200);
+            });
+        }
+
+        function selectAddr(inputId, lat, lng, name) {
+            document.getElementById(inputId).value = name;
+            document.getElementById(inputId === 'pickupInput' ? 'puDropdown' : 'deDropdown').classList.remove('show');
+            if (inputId === 'pickupInput') { pickupCoord = { lat, lng }; editMode = 'pickup'; }
+            else { deliveryCoord = { lat, lng }; editMode = 'delivery'; }
+            updateMap();
+            // 居中到选中点
+            if (map) map.setCenter([lng, lat]);
+        }
+
+        setupSearch('pickupInput', 'puDropdown');
+        setupSearch('deliveryInput', 'deDropdown');
+
+        function swapAddrs() {
+            const pEl = document.getElementById('pickupInput'), dEl = document.getElementById('deliveryInput');
+            const tmpV = pEl.value; pEl.value = dEl.value; dEl.value = tmpV;
+            const tmpC = { ...pickupCoord }; pickupCoord = { ...deliveryCoord }; deliveryCoord = tmpC;
+            updateMap();
+        }
+
+        // ===== 计费 =====
+        function calcPrice(km) {
+            let base = 0, dAdd = 0, deposit = 0;
+            const tip = +document.getElementById('tipSelect').value || 0;
+            if (taskType === 'express') {
+                const sz = document.getElementById('itemSize'); base = sz ? +sz.value : 1.5;
+                if (km > 1) dAdd = Math.ceil(km - 1) * 2;
+            } else if (taskType === 'food') {
+                base = 2.5; if (km > 0.5) dAdd = Math.ceil((km - 0.5) * 2);
+            } else if (taskType === 'print') {
+                base = 1.5; if (km > 0.5) dAdd = Math.ceil((km - 0.5) * 2);
+            } else if (taskType === 'shop') {
+                base = 8; deposit = 50; if (km > 1) dAdd = Math.ceil(km - 1) * 10;
+            }
+            document.getElementById('baseFee').textContent = base.toFixed(2);
+            document.getElementById('distFee').textContent = dAdd.toFixed(2);
+            document.getElementById('tipFeeDisp').textContent = tip.toFixed(2);
+            const tot = base + dAdd + deposit + tip;
+            document.getElementById('totalFeeDisp').textContent = tot.toFixed(2);
+            document.getElementById('bottomTotal').textContent = tot.toFixed(2);
+            return { base, dAdd, deposit, tip, tot, pure: base + dAdd + tip };
+        }
+        document.getElementById('tipSelect').addEventListener('change', () => calcPrice(curDistKm));
+        function pickTime(el, mode) { document.querySelectorAll('.time-chip').forEach(c => c.classList.remove('sel')); el.classList.add('sel'); }
+
+        // ===== 任务类型初始化 =====
+        function initTask() {
+            const title = document.getElementById('pageTitle'), notice = document.getElementById('specialNotice');
+            const fields = document.getElementById('dynamicFields'), dRow = document.getElementById('depositRow');
+            if (taskType === 'express') {
+                title.textContent = '📦 发布快递代取订单';
+                fields.innerHTML = `<div class="fg"><label>📦 包裹体积</label><select id="itemSize"><option value="1.5">小件包裹 · ¥ 1.5（信封 / 文件类）</option><option value="3.5">中件包裹 · ¥ 3.5（鞋盒大小）</option><option value="8.5">大件包裹 · ¥ 8.5（行李箱大小）</option></select></div><div class="fg"><label>📎 快递单号（选填，方便骑手查找）</label><input type="text" placeholder="例如：SF1234567890"></div>`;
+            } else if (taskType === 'food') {
+                title.textContent = '🍔 发布餐饮代取订单';
+                notice.classList.add('show');
+                notice.textContent = '💡 请先在商家 APP 自行下单，骑手仅负责前往取餐并配送到手。';
+                fields.innerHTML = `<div class="fg"><label>🧾 取餐凭证（订单号 / 取餐码）</label><input type="text" placeholder="请输入取餐码或订单号" required></div><div class="fg"><label>🍽 取餐食堂</label><select><option>嘉会园</option><option>桃李园</option><option>风华园</option><option>其他（请在备注中说明）</option></select></div>`;
+            } else if (taskType === 'print') {
+                title.textContent = '🖨️ 发布资料打印订单';
+                notice.classList.add('show');
+                notice.textContent = '💡 请提前联系打印店完成打印，骑手仅负责取件配送。全程保密处理。';
+                fields.innerHTML = `<div class="fg"><label>📄 取件凭证 / 文件说明</label><input type="text" placeholder="例如：「论文终稿 3 份」"></div><div class="fg"><label>🖨 打印店位置</label><select><option>校内打印店（一期）</option><option>西门对面打印店</option><option>图书馆自助打印机</option><option>其他（请在备注中说明）</option></select></div>`;
+            } else if (taskType === 'shop') {
+                title.textContent = '🛒 发布超市代购订单';
+                dRow.style.display = 'flex';
+                notice.classList.add('show');
+                notice.textContent = '💡 预付 ¥ 50 押金。骑手购买后上传小票，多退少补，押金原路返还。';
+                fields.innerHTML = `<div class="fg"><label>🛍 购物清单（请尽量详细描述）</label><textarea placeholder="例如：&#10;· 冰红茶 500ml × 2 瓶&#10;· 乐事薯片原味大包装 × 1&#10;· 得力黑色中性笔 × 3 支&#10;· 维达抽纸 × 1 提" style="min-height:110px;" required></textarea></div><div class="fg"><label>🏪 指定超市</label><select><option>校外天街超市</option><option>校内教育超市</option><option>西门便利店</option><option>不限，方便即可</option></select></div><div class="fg"><label>💵 购买预算上限（不含跑腿费）</label><input type="number" placeholder="例如：100" min="1"></div>`;
+            }
+            calcPrice(curDistKm);
+        }
+
+        // ===== 提交 =====
+        function doSubmit() {
+            const pv = document.getElementById('pickupInput').value.trim();
+            const dv = document.getElementById('deliveryInput').value.trim();
+            const ph = document.getElementById('phoneInput').value.trim();
+            if (!pv) return toast('⚠️ 请点击地图选点或搜索取货地址');
+            if (!dv) return toast('⚠️ 请点击地图选点或搜索收货地址');
+            if (!ph || !/^\d{11}$/.test(ph)) return toast('⚠️ 请填写正确的 11 位手机号码');
+            const calc = calcPrice(curDistKm);
+            const order = {
+                id: 'RUN_' + Date.now(), type: taskType,
+                title: document.getElementById('pageTitle').textContent.replace('发布', ''),
+                startLoc: pv, endLoc: dv,
+                startCoord: pickupCoord, endCoord: deliveryCoord,
+                distance: curDistKm.toFixed(2) + ' km（路径偏移实测）',
+                details: document.getElementById('detailsInput').value,
+                phone: ph,
+                fee: calc.pure.toFixed(2), totalPay: calc.tot.toFixed(2),
+                riderFee: (calc.pure * 0.95).toFixed(2),
+                hasDeposit: taskType === 'shop' ? '是' : '否',
+                tip: document.getElementById('tipSelect').value,
+                status: 'pending', createdAt: new Date().toISOString()
+            };
+            localStorage.setItem('current_running_order', JSON.stringify(order));
+            toast('✅ 订单发布成功！即将跳转追踪页');
+            setTimeout(() => { location.href = 'status.html'; }, 1200);
+        }
+
+        function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._tid); t._tid = setTimeout(() => t.classList.remove('show'), 2000); }
+
+        // ===== 启动 =====
+        initTask();
+        try {
+            const prev = JSON.parse(localStorage.getItem('current_running_order'));
+            if (prev && prev.startCoord) pickupCoord = prev.startCoord;
+            if (prev && prev.endCoord) deliveryCoord = prev.endCoord;
+        } catch(e) {}
+        setTimeout(initMap, 400);
+    </script>
+</body>
+</html>
