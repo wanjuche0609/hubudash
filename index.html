@@ -142,6 +142,30 @@
 
         @media (max-width: 1024px) { .card-grid { grid-template-columns: repeat(2, 1fr); gap: 1.2rem; } .hero { min-height: auto; padding: 8rem 5% 5rem; } }
         @media (max-width: 600px) { .card-grid { grid-template-columns: 1fr; } .nav { padding: 1.2rem 5%; } }
+
+        /* 订单历史 */
+        .orders-section { background: #f5f6f8; padding: 3rem 5%; min-height: 40vh; display: none; }
+        .orders-section.show { display: block; }
+        .orders-section .sect-title { font-size: 1.3rem; font-weight: 800; text-align: center; margin-bottom: 1.5rem; letter-spacing: .04em; color: #1a1a2e; }
+        .orders-section .sect-sub { font-size: .85rem; color: #999; text-align: center; margin-bottom: 1.5rem; }
+        .orders-container { max-width: 800px; margin: 0 auto; }
+        .order-mini { background: #fff; border-radius: 14px; padding: 1rem 1.3rem; margin-bottom: .7rem; box-shadow: 0 2px 8px rgba(0,0,0,.03); display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: .2s; text-decoration: none; color: inherit; }
+        .order-mini:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); transform: translateY(-2px); }
+        .om-left { flex: 1; }
+        .om-left .om-title { font-weight: 700; font-size: .9rem; letter-spacing: .03em; }
+        .om-left .om-route { font-size: .78rem; color: #999; margin-top: 2px; }
+        .om-left .om-date { font-size: .68rem; color: #ccc; margin-top: 2px; }
+        .om-right { text-align: right; margin-left: 12px; }
+        .om-right .om-price { font-weight: 800; font-size: 1rem; color: var(--primary); }
+        .om-right .om-status { font-size: .72rem; padding: 3px 10px; border-radius: 10px; font-weight: 600; letter-spacing: .03em; }
+        .os-pending { background: #fff9ea; color: #8b6914; }
+        .os-accepted { background: #fff0f0; color: var(--primary); }
+        .os-delivering { background: #e6faf8; color: #0d9488; }
+        .os-confirmed { background: #e6faf8; color: #0d9488; }
+        .os-cancelled { background: #f5f5f5; color: #999; }
+        .empty-orders { text-align: center; padding: 3rem; color: #999; display: none; }
+        .empty-orders.show { display: block; }
+
     </style>
 </head>
 <body>
@@ -151,7 +175,9 @@
             <div class="nav-logo">极速跑腿</div>
             <div class="nav-links">
                 <span class="nav-btn nav-btn-loc" onclick="toggleLoc()" id="locDisplay">📍 湖北大学 · 武昌校区</span>
+                <span class="nav-btn" id="userDisplay" style="display:none;">👤 <span id="userNameDisplay"></span></span>
                 <a href="runner.html" class="nav-btn">🏍️ 骑手接单</a>
+                <a href="#" class="nav-btn" id="logoutBtn" style="display:none;" onclick="doLogout()">🚪 退出</a>
             </div>
         </nav>
 
@@ -189,6 +215,14 @@
         </div>
     </div>
 
+    <!-- 用户订单列表 -->
+    <section class="orders-section" id="ordersSection">
+        <h3 class="sect-title">📋 我的订单</h3>
+        <p class="sect-sub" id="ordersSub"></p>
+        <div class="orders-container" id="ordersContainer"></div>
+        <div class="empty-orders" id="emptyOrders">📭 还没有订单，快去下单吧！</div>
+    </section>
+
     <a href="status.html" class="tracker-float" id="trackerFloat">🚴 追踪订单 ›</a>
 
     <div class="overlay" id="locOverlay" onclick="if(event.target===this) toggleLoc()">
@@ -205,6 +239,42 @@
     </div>
 
     <script>
+        const API = 'http://localhost:3000';
+
+        // ===== 认证守卫 =====
+        function getToken() { return localStorage.getItem('hubudash_token'); }
+        function getUser() { try { return JSON.parse(localStorage.getItem('hubudash_user')); } catch(e) { return null; } }
+
+        function doLogout() {
+            localStorage.removeItem('hubudash_token');
+            localStorage.removeItem('hubudash_user');
+            localStorage.removeItem('hubudash_role');
+            localStorage.removeItem('current_running_order');
+            location.href = 'index.html';
+        }
+
+        (function initAuth() {
+            const token = getToken();
+            if (!token) {
+                document.getElementById('logoutBtn').style.display = 'none';
+                document.getElementById('userDisplay').style.display = 'none';
+                const nav = document.querySelector('.nav-links');
+                const loginLink = document.createElement('a');
+                loginLink.href = 'login.html';
+                loginLink.className = 'nav-btn';
+                loginLink.textContent = '🔑 登录';
+                nav.insertBefore(loginLink, nav.firstChild);
+                return;
+            }
+            const user = getUser();
+            document.getElementById('logoutBtn').style.display = 'inline-block';
+            document.getElementById('userDisplay').style.display = 'inline-block';
+            document.getElementById('userNameDisplay').textContent = user ? user.username : '';
+            // 加载订单列表
+            loadUserOrders();
+        })();
+
+        // ===== 位置选择 =====
         function toggleLoc() { document.getElementById('locOverlay').classList.toggle('on'); }
         function pickLoc(name, el) {
             document.getElementById('locDisplay').textContent = '📍 ' + name;
@@ -213,9 +283,81 @@
             localStorage.setItem('user_campus_location', name);
             setTimeout(toggleLoc, 300);
         }
+
+        // ===== 加载用户订单列表 =====
+        async function loadUserOrders() {
+            const token = getToken();
+            if (!token) return;
+            try {
+                const res = await fetch(API + '/api/orders', { headers: { Authorization: 'Bearer ' + token } });
+                if (!res.ok) return;
+                const data = await res.json();
+                const orders = data.orders || [];
+                const section = document.getElementById('ordersSection');
+                const container = document.getElementById('ordersContainer');
+                const empty = document.getElementById('emptyOrders');
+                const sub = document.getElementById('ordersSub');
+
+                if (orders.length === 0) {
+                    section.classList.add('show');
+                    empty.classList.add('show');
+                    container.innerHTML = '';
+                    sub.textContent = '';
+                    return;
+                }
+
+                section.classList.add('show');
+                empty.classList.remove('show');
+                const activeCount = orders.filter(o => o.status !== 'confirmed' && o.status !== 'cancelled').length;
+                sub.textContent = activeCount > 0 ? `进行中 ${activeCount} 单 · 共 ${orders.length} 单` : `共 ${orders.length} 单`;
+
+                const statusLabels = { pending: '等待接单', accepted: '骑手已接单', delivering: '待确认收货', confirmed: '已完成', cancelled: '已取消' };
+                const statusClasses = { pending: 'os-pending', accepted: 'os-accepted', delivering: 'os-delivering', confirmed: 'os-confirmed', cancelled: 'os-cancelled' };
+                const typeIcons = { express: '📦', food: '🍔', print: '🖨️', shop: '🛒' };
+
+                container.innerHTML = orders.map(o => `
+                    <a href="status.html?id=${o.id}" class="order-mini">
+                        <div class="om-left">
+                            <div class="om-title">${typeIcons[o.type]||'📋'} ${o.title||'跑腿订单'}</div>
+                            <div class="om-route">${o.pickup_addr} → ${o.delivery_addr}</div>
+                            <div class="om-date">${(o.created_at||'').slice(0,16)}</div>
+                        </div>
+                        <div class="om-right">
+                            <div class="om-price">¥${(o.total_fee||0).toFixed(2)}</div>
+                            <span class="om-status ${statusClasses[o.status]||'os-pending'}">${statusLabels[o.status]||o.status}</span>
+                        </div>
+                    </a>
+                `).join('');
+            } catch(e) {}
+        }
+
+        // ===== 追踪浮动按钮 =====
+        (async function checkActiveOrder() {
+            const token = getToken();
+            if (!token) return;
+            try {
+                const res = await fetch(API + '/api/orders', { headers: { Authorization: 'Bearer ' + token } });
+                const data = await res.json();
+                const active = (data.orders || []).filter(o => o.status === 'accepted' || o.status === 'delivering');
+                if (active.length > 0) {
+                    const tf = document.getElementById('trackerFloat');
+                    tf.style.display = 'block';
+                    tf.href = 'status.html?id=' + active[0].id;
+                    localStorage.setItem('current_running_order', JSON.stringify({
+                        id: active[0].id,
+                        startLoc: active[0].pickup_addr,
+                        endLoc: active[0].delivery_addr,
+                        startCoord: { lat: active[0].pickup_lat, lng: active[0].pickup_lng },
+                        endCoord: { lat: active[0].delivery_lat, lng: active[0].delivery_lng },
+                        status: active[0].status
+                    }));
+                }
+            } catch(e) {}
+            loadUserOrders();
+        })();
+
+        // ===== 初始校区 =====
         (function() {
-            const raw = localStorage.getItem('current_running_order');
-            if (raw) { try { const d = JSON.parse(raw); if (d.status === 'accepted' || d.status === 'delivering') document.getElementById('trackerFloat').style.display = 'block'; } catch(e) {} }
             const saved = localStorage.getItem('user_campus_location');
             if (saved) document.getElementById('locDisplay').textContent = '📍 ' + saved;
         })();

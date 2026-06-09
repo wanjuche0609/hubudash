@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 极速跑腿</title>
+    <style>
+        :root { --primary: #ff6b6b; --primary-dark: #e55a5a; --teal: #4ecdc4; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: linear-gradient(160deg, #ff6b6b 0%, #e55a5a 35%, #c44569 100%); min-height:100vh; display:flex; align-items:center; justify-content:center; letter-spacing:.025em; padding:2rem; }
+        .container { width:100%; max-width:420px; }
+        .logo { text-align:center; color:#fff; margin-bottom:1.5rem; font-size:2rem; font-weight:800; letter-spacing:.06em; text-shadow:0 2px 8px rgba(0,0,0,.1); }
+        .card { background:#fff; border-radius:20px; padding:2rem 1.8rem; box-shadow:0 20px 60px rgba(0,0,0,.15); }
+        .tabs { display:flex; background:#f5f6f8; border-radius:26px; padding:4px; margin-bottom:1.6rem; }
+        .tab { flex:1; text-align:center; padding:10px; border-radius:22px; font-size:.9rem; font-weight:700; cursor:pointer; color:#999; transition:.25s; letter-spacing:.03em; }
+        .tab.on { background:var(--primary); color:#fff; box-shadow:0 4px 12px rgba(255,107,107,.3); }
+        .form-group { margin-bottom:16px; }
+        .form-group label { display:block; font-size:.8rem; font-weight:700; color:#6b7280; margin-bottom:6px; letter-spacing:.03em; }
+        .form-group input, .form-group select { width:100%; padding:12px 14px; border:2px solid #e5e7eb; border-radius:12px; font-size:.9rem; outline:none; background:#fafafa; transition:all .2s; font-family:inherit; letter-spacing:.03em; }
+        .form-group input:focus, .form-group select:focus { border-color:var(--primary); background:#fff; box-shadow:0 0 0 3px rgba(255,107,107,.06); }
+        .btn { width:100%; padding:14px; border:none; border-radius:14px; font-size:1rem; font-weight:700; cursor:pointer; letter-spacing:.04em; transition:all .2s; margin-top:8px; }
+        .btn-primary { background:linear-gradient(135deg, #ff6b6b, #e55a5a); color:#fff; box-shadow:0 6px 20px rgba(255,107,107,.3); }
+        .btn-primary:active { transform:scale(.97); opacity:.9; }
+        .err { color:var(--primary); font-size:.78rem; margin-top:4px; display:none; letter-spacing:.03em; }
+        .back { text-align:center; margin-top:1.2rem; }
+        .back a { color:rgba(255,255,255,.8); text-decoration:none; font-size:.85rem; }
+        .toast { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,.82); color:#fff; padding:14px 28px; border-radius:28px; font-size:.88rem; z-index:999; pointer-events:none; opacity:0; transition:opacity .3s; }
+        .toast.show { opacity:1; }
+        .hint { font-size:.75rem; color:#999; text-align:center; margin-top:12px; letter-spacing:.03em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">⚡ 极速跑腿</div>
+        <div class="card">
+            <div class="tabs">
+                <div class="tab on" onclick="switchTab('login')">🔑 登录</div>
+                <div class="tab" onclick="switchTab('register')">📝 注册</div>
+            </div>
+
+            <form id="loginForm" onsubmit="doLogin(event)">
+                <div class="form-group"><label>👤 用户名</label><input type="text" id="loginUser" placeholder="请输入用户名" required autocomplete="username"></div>
+                <div class="form-group"><label>🔒 密码</label><input type="password" id="loginPass" placeholder="请输入密码" required autocomplete="current-password"></div>
+                <div class="err" id="loginErr"></div>
+                <button class="btn btn-primary" type="submit">🚀 登录</button>
+            </form>
+
+            <form id="registerForm" style="display:none;" onsubmit="doRegister(event)">
+                <div class="form-group"><label>👤 用户名</label><input type="text" id="regUser" placeholder="请输入用户名" required autocomplete="username" minlength="2"></div>
+                <div class="form-group"><label>🔒 密码</label><input type="password" id="regPass" placeholder="至少6位密码" required autocomplete="new-password" minlength="6"></div>
+                <div class="form-group"><label>📱 手机号</label><input type="tel" id="regPhone" placeholder="请输入11位手机号" required pattern="\d{11}"></div>
+                <div class="form-group"><label>🧑 姓名（选填，接单时会显示给雇主）</label><input type="text" id="regName" placeholder="你的真实姓名，如不填则显示用户名"></div>
+                <div class="form-group"><label>📍 校区</label>
+                    <select id="regCampus">
+                        <option>湖北大学 · 武昌校区</option><option>一期学生公寓</option><option>二期学生公寓</option><option>团结学生公寓</option><option>普宿8栋/9栋</option><option>校外诚信公寓</option>
+                    </select>
+                </div>
+                <div class="err" id="regErr"></div>
+                <button class="btn btn-primary" type="submit">📝 注册</button>
+            </form>
+            <p class="hint">一个账号，既能下单也能接单跑腿</p>
+        </div>
+        <div class="back"><a href="index.html">← 返回首页</a></div>
+    </div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = 'http://localhost:3000';
+        function switchTab(t) {
+            document.querySelectorAll('.tab').forEach((x,i) => x.classList.toggle('on', (i===0&&t==='login')||(i===1&&t==='register')));
+            document.getElementById('loginForm').style.display = t==='login'?'block':'none';
+            document.getElementById('registerForm').style.display = t==='register'?'block':'none';
+            document.getElementById('loginErr').style.display='none';
+            document.getElementById('regErr').style.display='none';
+        }
+        function toast(m) { const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._tid); t._tid=setTimeout(()=>t.classList.remove('show'),2500); }
+
+        async function doLogin(e) {
+            e.preventDefault();
+            const u=document.getElementById('loginUser').value.trim(), p=document.getElementById('loginPass').value;
+            const err=document.getElementById('loginErr'); err.style.display='none';
+            try {
+                const res=await fetch(API+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+                const d=await res.json();
+                if(!res.ok){err.textContent=d.error;err.style.display='block';return;}
+                localStorage.setItem('hubudash_token',d.token);
+                localStorage.setItem('hubudash_user',JSON.stringify(d.user));
+                toast('✅ 登录成功！');
+                setTimeout(()=>{location.href='index.html';},600);
+            }catch(ex){err.textContent='网络错误，请确认服务已启动';err.style.display='block';}
+        }
+
+        async function doRegister(e) {
+            e.preventDefault();
+            const username=document.getElementById('regUser').value.trim(), password=document.getElementById('regPass').value;
+            const phone=document.getElementById('regPhone').value.trim(), real_name=document.getElementById('regName').value.trim();
+            const campus=document.getElementById('regCampus').value;
+            const err=document.getElementById('regErr'); err.style.display='none';
+            if(!/^\d{11}$/.test(phone)){err.textContent='请输入正确的11位手机号';err.style.display='block';return;}
+            try {
+                const res=await fetch(API+'/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,phone,real_name,campus})});
+                const d=await res.json();
+                if(!res.ok){err.textContent=d.error;err.style.display='block';return;}
+                localStorage.setItem('hubudash_token',d.token);
+                localStorage.setItem('hubudash_user',JSON.stringify(d.user));
+                toast('🎉 注册成功！');
+                setTimeout(()=>{location.href='index.html';},600);
+            }catch(ex){err.textContent='网络错误';err.style.display='block';}
+        }
+    </script>
+</body>
+</html>

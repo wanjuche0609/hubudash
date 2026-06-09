@@ -1,0 +1,17 @@
+{
+  "name": "hubudash",
+  "version": "1.0.0",
+  "description": "极速跑腿 - 湖北大学校园互助平台",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sql.js": "^1.10.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5"
+  }
+}

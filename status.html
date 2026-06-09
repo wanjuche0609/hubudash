@@ -74,6 +74,11 @@
         .modal-inner p { color:#888; font-size:.85rem; margin-bottom:1.1rem; letter-spacing:.03em; line-height:1.6; }
         .modal-inner .btn { width:100%; margin-bottom:5px; }
         .btn-ghost { background:transparent !important; color:#999 !important; box-shadow:none !important; font-weight:500; }
+        .star-row { display: flex; justify-content: center; gap: 8px; margin: 1rem 0; }
+        .star { font-size: 2.4rem; cursor: pointer; color: #ddd; transition: .15s; user-select: none; }
+        .star.on { color: #f39c12; }
+        .rating-input { width: 100%; padding: 10px 14px; border: 2px solid var(--border); border-radius: 12px; font-size: .85rem; outline: none; margin-bottom: .8rem; font-family: inherit; letter-spacing: .03em; text-align: center; }
+        .btn-cancel-order { background: #fff !important; color: var(--primary) !important; border: 1.5px solid #ffd5d5 !important; box-shadow: none !important; font-weight: 600 !important; }
 
         .toast { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,.82); color:#fff; padding:14px 28px; border-radius:28px; font-size:.88rem; z-index:10000; pointer-events:none; opacity:0; transition:opacity .3s; letter-spacing:.03em; }
         .toast.show { opacity:1; }
@@ -97,6 +102,25 @@
             <p id="modalText">请确认已收到物品，确认后款项将结算给骑手。</p>
             <button class="btn btn-teal" id="modalConfirmBtn" onclick="doConfirm()">✅ 确认无误，打款给骑手</button>
             <button class="btn btn-ghost" onclick="closeModal()">再等等</button>
+        </div>
+    </div>
+
+    <!-- 评价弹窗 -->
+    <div class="modal" id="ratingModal">
+        <div class="modal-inner">
+            <div class="mi">⭐</div>
+            <h3>评价骑手</h3>
+            <p>订单已完成，给骑手打个分吧！</p>
+            <div class="star-row" id="starRow">
+                <span class="star" onclick="setRating(1)">☆</span>
+                <span class="star" onclick="setRating(2)">☆</span>
+                <span class="star" onclick="setRating(3)">☆</span>
+                <span class="star" onclick="setRating(4)">☆</span>
+                <span class="star" onclick="setRating(5)">☆</span>
+            </div>
+            <input type="text" class="rating-input" id="ratingComment" placeholder="说点什么吧（选填）" maxlength="100">
+            <button class="btn btn-teal" onclick="doRate()">✅ 提交评价</button>
+            <button class="btn btn-ghost" onclick="skipRating()">跳过</button>
         </div>
     </div>
 
@@ -147,6 +171,7 @@
             <div class="btns">
                 <a href="index.html" class="btn btn-outline">返回首页</a>
                 <button class="btn btn-teal" id="contactBtn" onclick="toast('📞 正在呼叫骑手...')" disabled>联系骑手</button>
+                <button class="btn btn-cancel-order" id="cancelBtn" onclick="doCancelOrder()" style="display:none;">取消订单</button>
                 <button class="btn btn-primary" id="confirmBtn" onclick="showModal()" disabled>确认收货</button>
             </div>
         </div>
@@ -156,16 +181,89 @@
     <div class="toast" id="toast"></div>
 
     <script>
+        const API = 'http://localhost:3000';
+
+        /* ========== 认证 ========== */
+        function getToken() { return localStorage.getItem('hubudash_token'); }
+
+        (function checkAuth() {
+            if (!getToken()) {
+                toast('⚠️ 请先登录');
+                setTimeout(() => { location.href = 'login.html'; }, 1000);
+            }
+        })();
+
         /* ========== 工具函数 ========== */
-        function getOrder() {
+        // 从 API 获取订单
+        async function getOrderFromAPI() {
+            const token = getToken(); if (!token) return null;
+            // 先从 URL 参数获取订单 ID
+            const params = new URLSearchParams(location.search);
+            const orderId = params.get('id');
+            if (orderId) {
+                try {
+                    const res = await fetch(API + '/api/orders/' + orderId, { headers: { Authorization: 'Bearer ' + token } });
+                    if (res.ok) { const data = await res.json(); return data.order; }
+                } catch(e) {}
+            }
+            // 降级：获取用户最近的订单
+            try {
+                const res = await fetch(API + '/api/orders', { headers: { Authorization: 'Bearer ' + token } });
+                if (res.ok) {
+                    const data = await res.json();
+                    const active = (data.orders || []).find(o => o.status !== 'confirmed' && o.status !== 'cancelled');
+                    if (active) return active;
+                    if (data.orders.length > 0) return data.orders[0]; // 返回最近一个
+                }
+            } catch(e) {}
+            return null;
+        }
+
+        function getOrderLocal() {
             try { const r = localStorage.getItem('current_running_order'); return r ? JSON.parse(r) : null; }
             catch(e) { return null; }
         }
-        function saveOrder(o) { localStorage.setItem('current_running_order', JSON.stringify(o)); }
+
+        function saveOrderLocal(o) { localStorage.setItem('current_running_order', JSON.stringify(o)); }
         function $(id) { return document.getElementById(id); }
         function toast(msg) {
             const t = $('toast'); t.textContent = msg; t.classList.add('show');
             clearTimeout(t._tid); t._tid = setTimeout(() => t.classList.remove('show'), 2000);
+        }
+
+        // 统一获取订单（API 优先，降级到 localStorage）
+        async function getOrder() {
+            const apiOrder = await getOrderFromAPI();
+            if (apiOrder) {
+                // 同步到 localStorage 兼容其他逻辑
+                const locOrder = {
+                    id: apiOrder.id,
+                    order_no: apiOrder.order_no,
+                    type: apiOrder.type,
+                    title: apiOrder.title,
+                    startLoc: apiOrder.pickup_addr,
+                    endLoc: apiOrder.delivery_addr,
+                    startCoord: { lat: apiOrder.pickup_lat, lng: apiOrder.pickup_lng },
+                    endCoord: { lat: apiOrder.delivery_lat, lng: apiOrder.delivery_lng },
+                    distance: (apiOrder.distance_km || 0).toFixed(2) + ' km',
+                    details: apiOrder.details,
+                    phone: apiOrder.phone,
+                    fee: ((apiOrder.base_fee||0) + (apiOrder.distance_fee||0) + (apiOrder.tip||0)).toFixed(2),
+                    totalPay: (apiOrder.total_fee || 0).toFixed(2),
+                    riderFee: (apiOrder.rider_fee || 0).toFixed(2),
+                    tip: apiOrder.tip,
+                    status: apiOrder.status,
+                    createdAt: apiOrder.created_at,
+                    acceptedAt: apiOrder.accepted_at,
+                    deliveredAt: apiOrder.delivered_at,
+                    riderName: apiOrder.rider_name || '',
+                    riderPhone: apiOrder.rider_phone || '',
+                    riderRating: apiOrder.rider_rating || 5.0,
+                };
+                saveOrderLocal(locOrder);
+                return locOrder;
+            }
+            return getOrderLocal();
         }
 
         /* ========== 路径生成（弯曲偏移） ========== */
@@ -207,16 +305,26 @@
         let pMarker, dMarker, rMarker, rLine;
         let pickupCoord, deliveryCoord;
 
-        function initMap() {
-            const order = getOrder();
+        async function initMap() {
+            const order = await getOrder();
             if (!order) { $('maskTitle').textContent = '暂无活跃订单'; $('maskHint').textContent = '请返回首页下单'; return; }
+
+            const container = document.getElementById('trackMap');
+            if (!container || container.offsetWidth === 0) { setTimeout(() => initMap().catch(()=>{}), 300); return; }
 
             pickupCoord = order.startCoord || { lat: 30.575, lng: 114.331 };
             deliveryCoord = order.endCoord || { lat: 30.574, lng: 114.334 };
             routePath = genRoute(pickupCoord, deliveryCoord);
 
             const c = [(pickupCoord.lng + deliveryCoord.lng)/2, (pickupCoord.lat + deliveryCoord.lat)/2];
-            trackMap = new AMap.Map('trackMap', { center: c, zoom: 15, mapStyle: 'amap://styles/light' });
+            try {
+                trackMap = new AMap.Map('trackMap', { center: c, zoom: 15, mapStyle: 'amap://styles/light', resizeEnable:true });
+            } catch(e) {
+                console.warn('Map init failed');
+                $('mapMask').classList.add('off');
+                $('maskTitle').textContent = '地图加载失败';
+                return;
+            }
 
             rLine = new AMap.Polyline({ path: routePath, strokeColor: '#ff6b6b', strokeWeight: 6, strokeOpacity: .8, lineJoin: 'round', lineCap: 'round', showDir: true });
             rLine.setMap(trackMap);
@@ -247,7 +355,7 @@
 
             trackMap.setFitView([pMarker, dMarker], false, [60,60,60,60]);
             $('mapMask').classList.add('off');
-            refreshUI(order);
+            // 注意：不在这里调 refreshUI，避免覆盖 onload 中已正确设置的按钮状态
             if (order.status === 'accepted') startAnim();
             if (order.status === 'delivering') {
                 rMarker.setPosition(routePath[routePath.length-1]);
@@ -262,26 +370,31 @@
             if (!order) return;
             const badge = $('badge'), title = $('statusTitle'), desc = $('statusDesc');
             const s2 = $('s2'), s3 = $('s3'), s4 = $('s4');
-            const riderInf = $('riderInf'), contactBtn = $('contactBtn'), confirmBtn = $('confirmBtn');
+            const riderInf = $('riderInf'), contactBtn = $('contactBtn'), confirmBtn = $('confirmBtn'), cancelBtn = $('cancelBtn');
 
             // 重置按钮
             contactBtn.disabled = true;
             confirmBtn.disabled = true;
             confirmBtn.textContent = '确认收货';
+            cancelBtn.style.display = 'none';
 
             if (order.status === 'pending') {
                 badge.textContent = '⏳ 等待接单'; badge.className = 'badge b-pending';
                 title.textContent = '正在呼叫骑手...';
                 desc.textContent = '订单已发布，系统正在为您匹配校内最快兼职骑手';
+                cancelBtn.style.display = 'inline-block';
             } else if (order.status === 'accepted') {
                 badge.textContent = '🛵 骑手已接单'; badge.className = 'badge b-accepted';
                 title.textContent = '骑手已接单，正在配送';
                 desc.textContent = `骑手已前往「${order.startLoc}」取件，正送往「${order.endLoc}」`;
                 s2.classList.add('cur'); riderInf.classList.add('on');
-                $('riderName').textContent = '张同学（校内兼职骑手）';
+                const rn1 = order.riderName || '骑手';
+                $('riderName').textContent = rn1 + '（校内兼职骑手）';
+                $('etaRName').textContent = rn1 + '（校内骑手）';
                 $('etaBar').classList.add('on');
                 contactBtn.disabled = false;
-                confirmBtn.disabled = true; // 配送中不可确认
+                contactBtn.onclick = function() { toast('📞 骑手电话：' + (order.riderPhone || order.phone)); };
+                confirmBtn.disabled = true;
             } else if (order.status === 'delivering') {
                 badge.textContent = '📍 已送达 · 待确认'; badge.className = 'badge b-delivering';
                 title.textContent = '骑手已送达，请确认收货';
@@ -290,13 +403,16 @@
                 s3.classList.add('done'); s3.querySelector('.tl-d').textContent = '✓';
                 s4.classList.add('cur');
                 riderInf.classList.add('on');
-                $('riderName').textContent = '张同学（校内兼职骑手）';
+                const rn2 = order.riderName || '骑手';
+                $('riderName').textContent = rn2 + '（校内兼职骑手）';
+                $('etaRName').textContent = rn2 + '（校内骑手）';
                 $('riderDist').textContent = '距离您：0 米';
                 $('etaDisp').textContent = '已送达';
                 $('etaBar').classList.add('on');
                 $('etaTime').textContent = '已送达';
                 $('etaDist').textContent = '距离约 0 米';
                 contactBtn.disabled = false;
+                contactBtn.onclick = function() { toast('📞 骑手电话：' + (order.riderPhone || order.phone)); };
                 confirmBtn.disabled = false;
             } else if (order.status === 'confirmed') {
                 badge.textContent = '✅ 已完成'; badge.className = 'badge b-done';
@@ -305,6 +421,11 @@
                 [s2,s3,s4].forEach(p => { p.classList.add('done'); p.classList.remove('cur'); });
                 s2.querySelector('.tl-d').textContent = '✓'; s3.querySelector('.tl-d').textContent = '✓'; s4.querySelector('.tl-d').textContent = '✓';
                 confirmBtn.textContent = '✅ 已完成';
+            } else if (order.status === 'cancelled') {
+                badge.textContent = '❌ 已取消'; badge.className = 'badge b-pending';
+                title.textContent = '订单已取消';
+                desc.textContent = '该订单已被取消';
+                confirmBtn.textContent = '已取消';
             }
         }
 
@@ -335,57 +456,111 @@
         }
 
         /* ========== 确认收货流程 ========== */
-        function showModal() {
-            const order = getOrder();
+        async function showModal() {
+            const order = await getOrder();
             if (!order) { toast('⚠️ 未找到订单，请刷新页面'); return; }
             if (order.status !== 'delivering') {
                 toast('⚠️ 骑手尚未确认送达，请耐心等待');
                 return;
             }
-            $('modalText').textContent = `实付金额 ¥ ${order.totalPay}，确认后 ¥ ${order.riderFee} 将结算给骑手。`;
+            $('modalText').textContent = `实付金额 ¥ ${order.totalPay || '0.00'}，确认后 ¥ ${(order.riderFee || 0).toFixed(2)} 将结算给骑手。`;
             $('modal').classList.add('show');
         }
         function closeModal() { $('modal').classList.remove('show'); }
 
-        function doConfirm() {
-            const order = getOrder();
+        let confirmedOrderId = null;
+
+        async function doConfirm() {
+            const token = getToken(); if (!token) return;
+            const order = await getOrder();
             if (!order) { toast('❌ 确认失败：未找到订单'); return; }
             if (order.status !== 'delivering') { toast('❌ 订单状态异常，请刷新页面'); closeModal(); return; }
 
-            const earn = parseFloat(order.riderFee) || 0;
-            const curWallet = parseFloat(localStorage.getItem('runner_wallet_balance') || '0');
-            const newWallet = curWallet + earn;
+            try {
+                const res = await fetch(API + '/api/orders/' + order.id + '/confirm', {
+                    method: 'POST',
+                    headers: { Authorization: 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (!res.ok) { toast('❌ ' + (data.error || '确认失败')); closeModal(); return; }
 
-            // 结算
-            localStorage.setItem('runner_wallet_balance', newWallet.toFixed(2));
-            order.status = 'confirmed';
-            order.commissionReceived = earn.toFixed(2);
-            order.confirmedAt = new Date().toISOString();
-            saveOrder(order);
+                order.status = 'confirmed';
+                order.commissionReceived = (order.riderFee || 0).toFixed(2);
+                order.confirmedAt = new Date().toISOString();
+                saveOrderLocal(order);
+                confirmedOrderId = order.id;
 
-            // 更新统计
-            const totalOrd = parseInt(localStorage.getItem('runner_total_orders') || '0');
-            localStorage.setItem('runner_total_orders', totalOrd + 1);
+                closeModal();
+                if (animTimer) clearInterval(animTimer);
+                refreshUI(order);
+                toast(`🎉 收货成功！`);
+                // 弹出评价弹窗
+                setTimeout(() => showRatingModal(), 600);
+            } catch(e) {
+                toast('⚠️ 网络错误，请确保服务已启动');
+            }
+        }
 
-            // 添加到骑手历史
-            const hist = JSON.parse(localStorage.getItem('runner_order_history') || '[]');
-            hist.push({ title: order.title, startLoc: order.startLoc, endLoc: order.endLoc, earned: earn.toFixed(2), date: new Date().toLocaleDateString('zh-CN') });
-            localStorage.setItem('runner_order_history', JSON.stringify(hist));
+        // ===== 评价 =====
+        let selectedRating = 0;
+        function setRating(r) {
+            selectedRating = r;
+            const stars = document.querySelectorAll('#starRow .star');
+            stars.forEach((s, i) => {
+                s.textContent = i < r ? '★' : '☆';
+                s.classList.toggle('on', i < r);
+            });
+        }
+        function showRatingModal() { document.getElementById('ratingModal').classList.add('show'); selectedRating = 0; document.querySelectorAll('#starRow .star').forEach(s => { s.textContent = '☆'; s.classList.remove('on'); }); document.getElementById('ratingComment').value = ''; }
+        function closeRatingModal() { document.getElementById('ratingModal').classList.remove('show'); }
+        function skipRating() { closeRatingModal(); setTimeout(() => { location.href = 'index.html'; }, 300); }
+        async function doRate() {
+            if (selectedRating === 0) { toast('⚠️ 请选择评分'); return; }
+            const token = getToken(); if (!token || !confirmedOrderId) return;
+            const comment = document.getElementById('ratingComment').value.trim();
+            try {
+                const res = await fetch(API + '/api/orders/' + confirmedOrderId + '/rate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                    body: JSON.stringify({ rating: selectedRating, comment })
+                });
+                const data = await res.json();
+                if (res.ok) { toast('⭐ 感谢评价！骑手当前评分：' + (data.new_rating || selectedRating).toFixed(1)); }
+                else { toast('⚠️ ' + (data.error || '评价失败')); }
+            } catch(e) { toast('⚠️ 网络错误'); }
+            closeRatingModal();
+            setTimeout(() => { location.href = 'index.html'; }, 1200);
+        }
 
-            closeModal();
-            if (animTimer) clearInterval(animTimer);
-            refreshUI(order);
-            toast(`🎉 收货成功！¥ ${earn.toFixed(2)} 已存入骑手钱包`);
-            setTimeout(() => { location.href = 'index.html'; }, 2200);
+        // ===== 取消订单 =====
+        async function doCancelOrder() {
+            if (!confirm('确定要取消此订单吗？')) return;
+            const token = getToken(); if (!token) return;
+            const order = await getOrder();
+            if (!order) { toast('⚠️ 未找到订单'); return; }
+
+            try {
+                const res = await fetch(API + '/api/orders/' + order.id + '/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                    body: JSON.stringify({ reason: '用户主动取消' })
+                });
+                const data = await res.json();
+                if (!res.ok) { toast('⚠️ ' + (data.error || '取消失败')); return; }
+                order.status = 'cancelled';
+                saveOrderLocal(order);
+                refreshUI(order);
+                toast('📌 订单已取消');
+            } catch(e) { toast('⚠️ 网络错误'); }
         }
 
         /* ========== 模拟接单 ========== */
-        window.forceAccept = function() {
-            const order = getOrder();
+        window.forceAccept = async function() {
+            const order = await getOrder();
             if (!order) { toast('⚠️ 请先下单'); return; }
             if (order.status !== 'pending') { toast('⚠️ 当前状态不支持模拟接单'); return; }
             order.status = 'accepted'; order.acceptedAt = new Date().toISOString();
-            saveOrder(order);
+            saveOrderLocal(order);
             if (rMarker && routePath.length > 0) rMarker.setPosition(routePath[0]);
             refreshUI(order); startAnim();
             toast('✅ 模拟接单成功！骑手已出发');
@@ -393,8 +568,8 @@
 
         /* ========== 状态轮询 ========== */
         let lastStatus = null;
-        function pollStatus() {
-            const order = getOrder();
+        async function pollStatus() {
+            const order = await getOrder();
             if (!order) return;
             if (order.status !== lastStatus) {
                 const prev = lastStatus;
@@ -411,9 +586,12 @@
             }
         }
 
+        // 等待 AMap 加载
+        function waitForAMap(cb, max) { max=max||50; let n=0; function check(){ if(typeof AMap!=='undefined'&&AMap.Map){cb();return;} if(++n>max)return; setTimeout(check,200); } check(); }
+
         /* ========== 启动 ========== */
-        window.onload = function() {
-            const order = getOrder();
+        window.onload = async function() {
+            const order = await getOrder();
             if (!order) {
                 $('statusTitle').textContent = '无活跃订单';
                 $('statusDesc').textContent = '请先返回首页下单';
@@ -423,7 +601,8 @@
             }
             lastStatus = order.status;
             refreshUI(order);
-            initMap();
+            // 等待 Amap 可用后再初始化地图
+            waitForAMap(() => { initMap().catch(() => {}); });
             setInterval(pollStatus, 1200);
         };
 
