@@ -516,34 +516,81 @@
 
         // ===== 评价 =====
         let selectedRating = 0;
+
         function setRating(r) {
             selectedRating = r;
-            const stars = document.querySelectorAll('#starRow .star');
-            stars.forEach((s, i) => {
-                s.textContent = i < r ? '★' : '☆';
-                s.classList.toggle('on', i < r);
-            });
+            var stars = document.querySelectorAll('#starRow .star');
+            for (var i = 0; i < stars.length; i++) {
+                stars[i].textContent = i < r ? '★' : '☆';
+                if (i < r) stars[i].classList.add('on');
+                else stars[i].classList.remove('on');
+            }
         }
-        function showRatingModal() { document.getElementById('ratingModal').classList.add('show'); selectedRating = 0; document.querySelectorAll('#starRow .star').forEach(s => { s.textContent = '☆'; s.classList.remove('on'); }); document.getElementById('ratingComment').value = ''; }
-        function closeRatingModal() { document.getElementById('ratingModal').classList.remove('show'); }
-        function skipRating() { closeRatingModal(); setTimeout(() => { location.href = 'index.html'; }, 300); }
-        async function doRate() {
-            if (selectedRating === 0) { toast('⚠️ 请选择评分'); return; }
-            const token = getToken(); if (!token || !confirmedOrderId) return;
-            const comment = document.getElementById('ratingComment').value.trim();
-            try {
-                const res = await fetch(API + '/api/orders/' + confirmedOrderId + '/rate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-                    body: JSON.stringify({ rating: selectedRating, comment })
-                });
-                const data = await res.json();
-                if (res.ok) { toast('⭐ 感谢评价！骑手当前评分：' + (data.new_rating || selectedRating).toFixed(1)); }
-                else { toast('⚠️ ' + (data.error || '评价失败')); }
-            } catch(e) { toast('⚠️ 网络错误'); }
+
+        function showRatingModal() {
+            var modal = document.getElementById('ratingModal');
+            if (!modal) return;
+            modal.classList.add('show');
+            selectedRating = 0;
+            var stars = document.querySelectorAll('#starRow .star');
+            for (var i = 0; i < stars.length; i++) {
+                stars[i].textContent = '☆';
+                stars[i].classList.remove('on');
+            }
+            var commentEl = document.getElementById('ratingComment');
+            if (commentEl) commentEl.value = '';
+        }
+
+        function closeRatingModal() {
+            var modal = document.getElementById('ratingModal');
+            if (modal) modal.classList.remove('show');
+        }
+
+        function skipRating() {
             closeRatingModal();
-            setTimeout(() => { location.href = 'index.html'; }, 1200);
+            location.href = 'index.html';
         }
+
+        async function doRate() {
+            if (selectedRating === 0) {
+                toast('⚠️ 请先点击星星评分');
+                return;
+            }
+            var token = getToken();
+            if (!token) { toast('❌ 请先登录'); closeRatingModal(); return; }
+            if (!confirmedOrderId) { toast('⚠️ 订单信息丢失'); closeRatingModal(); location.href = 'index.html'; return; }
+
+            var commentEl = document.getElementById('ratingComment');
+            var comment = commentEl ? commentEl.value.trim() : '';
+
+            try {
+                var res = await fetch(API + '/api/orders/' + confirmedOrderId + '/rate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ rating: selectedRating, comment: comment })
+                });
+                var data = await res.json();
+                if (res.ok) {
+                    toast('⭐ 感谢评价！骑手评分：' + (data.new_rating || selectedRating).toFixed(1));
+                } else {
+                    toast('⚠️ ' + (data.error || '评价失败'));
+                }
+            } catch(e) {
+                toast('⚠️ 网络错误');
+            }
+            closeRatingModal();
+            setTimeout(function() { location.href = 'index.html'; }, 1500);
+        }
+
+        // 评价弹窗点背景关闭
+        (function() {
+            var rm = document.getElementById('ratingModal');
+            if (rm) {
+                rm.addEventListener('click', function(e) {
+                    if (e.target === rm) closeRatingModal();
+                });
+            }
+        })();
 
         // ===== 取消订单 =====
         async function doCancelOrder() {
