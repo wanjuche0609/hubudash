@@ -421,6 +421,8 @@
                 [s2,s3,s4].forEach(p => { p.classList.add('done'); p.classList.remove('cur'); });
                 s2.querySelector('.tl-d').textContent = '✓'; s3.querySelector('.tl-d').textContent = '✓'; s4.querySelector('.tl-d').textContent = '✓';
                 confirmBtn.textContent = '✅ 已完成';
+                confirmBtn.disabled = true;
+                cancelBtn.style.display = 'none';
             } else if (order.status === 'cancelled') {
                 badge.textContent = '❌ 已取消'; badge.className = 'badge b-pending';
                 title.textContent = '订单已取消';
@@ -457,20 +459,14 @@
 
         /* ========== 确认收货流程 ========== */
         async function showModal() {
-            try {
-                const order = await getOrder();
-                if (!order) { toast('⚠️ 未找到订单，请刷新页面'); return; }
-                console.log('showModal: order status =', order.status, 'order id =', order.id);
-                if (order.status !== 'delivering') {
-                    toast('⚠️ 当前状态：' + order.status + '，请等待骑手确认送达');
-                    return;
-                }
-                $('modalText').textContent = `实付金额 ¥ ${order.totalPay || '0.00'}，确认后 ¥ ${(order.riderFee || 0).toFixed(2)} 将结算给骑手。`;
-                $('modal').classList.add('show');
-            } catch(e) {
-                console.error('showModal error:', e);
-                toast('⚠️ 出错了，请刷新页面重试');
+            const order = await getOrder();
+            if (!order) { toast('⚠️ 未找到订单，请刷新页面'); return; }
+            if (order.status !== 'delivering') {
+                toast('⚠️ 当前状态：' + order.status + '，请等待骑手确认送达');
+                return;
             }
+            $('modalText').textContent = `实付金额 ¥ ${order.totalPay || '0.00'}，确认后 ¥ ${(order.riderFee || 0).toFixed(2)} 将结算给骑手。`;
+            $('modal').classList.add('show');
         }
         function closeModal() { $('modal').classList.remove('show'); }
 
