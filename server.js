@@ -325,6 +325,15 @@ async function startServer() {
   });
 
   // ─── 用户功能 ─────────────────────────────────────────
+  app.post('/api/rider/toggle-online', authMiddleware, (req, res) => {
+    // 兼容旧接口
+    const user = dbGet('SELECT is_online FROM users WHERE id = ?', [req.auth.id]);
+    const ns = user.is_online ? 0 : 1;
+    dbRun('UPDATE users SET is_online = ? WHERE id = ?', [ns, req.auth.id]);
+    saveDb();
+    res.json({ ok: true, is_online: !!ns });
+  });
+
   app.post('/api/user/toggle-online', authMiddleware, (req, res) => {
     const user = dbGet('SELECT is_online FROM users WHERE id = ?', [req.auth.id]);
     const ns = user.is_online ? 0 : 1;

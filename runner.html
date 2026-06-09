@@ -181,7 +181,7 @@
         async function toggleOnline() {
             const token = getToken(); if (!token) return;
             try {
-                const res = await fetch(API + '/api/rider/toggle-online', {
+                const res = await fetch(API + '/api/user/toggle-online', {
                     method: 'POST', headers: { Authorization: 'Bearer ' + token }
                 });
                 const data = await res.json();
