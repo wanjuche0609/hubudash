@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: hubudash
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 20.x
+      - key: DB_PATH
+        value: /opt/render/project/src/data/hubudash.db
