@@ -48,19 +48,20 @@
         .sd-item .sd-info .sd-name { font-weight:600; }
         .sd-item .sd-info .sd-addr { font-size:.72rem; color:#999; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-        /* 已选地址卡片 */
-        .addr-cards { padding:12px 5%; display:flex; gap:10px; }
-        .addr-card { flex:1; background:var(--card); border-radius:14px; padding:14px; box-shadow:0 2px 8px rgba(0,0,0,.03); cursor:pointer; transition:.2s; position:relative; }
-        .addr-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.08); }
-        .addr-card .ac-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; }
-        .ac-dot-pu { background:var(--primary); }
-        .ac-dot-de { background:var(--teal); }
-        .addr-card .ac-label { font-size:.7rem; font-weight:700; color:var(--sub); letter-spacing:.05em; margin-bottom:4px; }
-        .addr-card .ac-text { font-size:.85rem; font-weight:600; letter-spacing:.03em; color:var(--text); }
-        .addr-card .ac-sub { font-size:.72rem; color:#999; margin-top:3px; }
-        .addr-card.active { border:2px solid var(--primary); }
-        .addr-card.de-active { border:2px solid var(--teal); }
-        .addr-swap { width:36px; min-width:36px; height:36px; border-radius:50%; background:#fff; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1rem; margin-top:22px; transition:.3s; box-shadow:0 2px 6px rgba(0,0,0,.03); }
+        .addr-inputs { padding:12px 5%; }
+        .addr-input-row { display:flex; align-items:stretch; gap:8px; }
+        .addr-input-col { flex:1; position:relative; }
+        .ai-label { display:block; font-size:.74rem; font-weight:700; margin-bottom:5px; letter-spacing:.04em; }
+        .ai-label.pu { color:var(--primary); }
+        .ai-label.de { color:var(--teal); }
+        .addr-input-col input { width:100%; padding:11px 14px; border:2px solid var(--border); border-radius:12px; font-size:.87rem; outline:none; background:#fff; transition:.2s; letter-spacing:.03em; }
+        .addr-input-col input:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(255,107,107,.06); }
+        .addr-dropdown { position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid var(--border); border-radius:0 0 12px 12px; box-shadow:0 8px 24px rgba(0,0,0,.1); z-index:50; max-height:220px; overflow-y:auto; display:none; }
+        .addr-dropdown.show { display:block; }
+        .addr-dropdown .item { padding:11px 14px; cursor:pointer; font-size:.82rem; border-bottom:1px solid #f5f5f5; letter-spacing:.03em; transition:.12s; }
+        .addr-dropdown .item:hover { background:#fff5f5; color:var(--primary); font-weight:600; }
+        .addr-dropdown .item .sub { font-size:.7rem; color:#999; margin-top:2px; }
+        .addr-swap { width:36px; min-width:36px; height:36px; border-radius:50%; background:#fff; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1rem; margin-top:22px; transition:.3s; }
         .addr-swap:active { transform:rotate(180deg); }
 
         /* 表单卡片 */
@@ -122,18 +123,20 @@
         <div class="search-dropdown" id="searchDropdown"></div>
     </div>
 
-    <!-- 已选地址卡片 -->
-    <div class="addr-cards">
-        <div class="addr-card active" id="pickupCard" onclick="setMode('pickup')">
-            <div class="ac-label"><span class="ac-dot ac-dot-pu"></span>取货地点</div>
-            <div class="ac-text" id="pickupText">点击地图或搜索选择</div>
-            <div class="ac-sub" id="pickupSub"></div>
-        </div>
-        <button class="addr-swap" onclick="swapAddrs()">⇅</button>
-        <div class="addr-card" id="deliveryCard" onclick="setMode('delivery')">
-            <div class="ac-label"><span class="ac-dot ac-dot-de"></span>收货地点</div>
-            <div class="ac-text" id="deliveryText">点击地图或搜索选择</div>
-            <div class="ac-sub" id="deliverySub"></div>
+    <!-- 地址输入 -->
+    <div class="addr-inputs">
+        <div class="addr-input-row">
+            <div class="addr-input-col">
+                <label class="ai-label pu">● 取货地点</label>
+                <input type="text" id="pickupInput" placeholder="输入或搜索地址" autocomplete="off">
+                <div class="addr-dropdown" id="puDropdown"></div>
+            </div>
+            <button class="addr-swap" onclick="swapAddrs()">⇅</button>
+            <div class="addr-input-col">
+                <label class="ai-label de">● 收货地点</label>
+                <input type="text" id="deliveryInput" placeholder="输入或搜索地址" autocomplete="off">
+                <div class="addr-dropdown" id="deDropdown"></div>
+            </div>
         </div>
     </div>
 
@@ -233,6 +236,8 @@
             document.getElementById('searchDropdown').addEventListener('click', function(e) { e.stopPropagation(); });
 
             updateMap();
+            setupAddrInput('pickupInput', 'pickup');
+            setupAddrInput('deliveryInput', 'delivery');
         }
 
         // 反查地址
@@ -248,32 +253,77 @@
             });
         }
 
-        // 选中地址
+        // 选中地址 → 填入输入框
         function setAddr(mode, addr, lat, lng) {
             if (mode === 'pickup') {
                 pickupAddr = addr; pickupCoord = { lat, lng };
-                document.getElementById('pickupText').textContent = addr.slice(0, 20);
-                document.getElementById('pickupSub').textContent = addr.length > 20 ? addr : '';
+                document.getElementById('pickupInput').value = addr;
             } else {
                 deliveryAddr = addr; deliveryCoord = { lat, lng };
-                document.getElementById('deliveryText').textContent = addr.slice(0, 20);
-                document.getElementById('deliverySub').textContent = addr.length > 20 ? addr : '';
+                document.getElementById('deliveryInput').value = addr;
             }
-            updateAddrCardHighlight();
             clearSearchMarkers();
             updateMap();
             document.getElementById('searchDropdown').classList.remove('show');
             document.getElementById('searchInput').value = '';
-            // 定位到选中点
+            document.getElementById('puDropdown').classList.remove('show');
+            document.getElementById('deDropdown').classList.remove('show');
             if (map) map.setCenter([lng, lat]);
         }
 
-        function updateAddrCardHighlight() {
-            const pc = document.getElementById('pickupCard'), dc = document.getElementById('deliveryCard');
-            pc.classList.remove('active'); dc.classList.remove('de-active');
-            if (editMode === 'pickup') pc.classList.add('active');
-            else dc.classList.add('de-active');
+        // 监听输入框手动输入
+        function setupAddrInput(inputId, mode) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(mode === 'pickup' ? 'puDropdown' : 'deDropdown');
+            let timer;
+            input.addEventListener('input', function() {
+                const val = this.value.trim();
+                // 同步到状态
+                if (mode === 'pickup') pickupAddr = val;
+                else deliveryAddr = val;
+                // 输入时搜索建议
+                clearTimeout(timer);
+                if (!val) { dropdown.classList.remove('show'); return; }
+                timer = setTimeout(() => suggestAddr(val, dropdown, mode), 200);
+            });
+            input.addEventListener('focus', function() {
+                if (this.value.trim()) suggestAddr(this.value.trim(), dropdown, mode);
+            });
+            input.addEventListener('blur', function() {
+                setTimeout(() => dropdown.classList.remove('show'), 200);
+            });
         }
+
+        function suggestAddr(val, dropdown, mode) {
+            if (!autoComplete && !placeSearch) { setTimeout(() => suggestAddr(val, dropdown, mode), 300); return; }
+            const results = [];
+            const doRender = () => {
+                if (results.length === 0) { dropdown.classList.remove('show'); return; }
+                dropdown.innerHTML = results.map(r => `
+                    <div class="item" onclick="setAddr('${mode}','${r.name.replace(/'/g,"\\\'")}',${r.lat},${r.lng})">
+                        <div>📍 ${r.name}</div><div class="sub">${r.addr||''}</div>
+                    </div>
+                `).join('');
+                dropdown.classList.add('show');
+            };
+            if (autoComplete) {
+                autoComplete.search(val, function(status, result) {
+                    if (status === 'complete' && result.tips) {
+                        result.tips.filter(t => t.location && t.name).slice(0, 6).forEach(t => results.push({ name:t.name, addr:(t.district||'')+(t.address||''), lat:t.location.lat, lng:t.location.lng }));
+                    }
+                    doRender();
+                });
+            } else if (placeSearch) {
+                placeSearch.search(val, function(status, result) {
+                    if (status === 'complete' && result.poiList) {
+                        result.poiList.pois.slice(0, 6).forEach(p => results.push({ name:p.name, addr:p.address||'', lat:p.location.lat, lng:p.location.lng }));
+                    }
+                    doRender();
+                });
+            }
+        }
+
+        function updateAddrCardHighlight() {}
 
         // 清除搜索标记
         function clearSearchMarkers() {
@@ -377,7 +427,6 @@
             editMode = mode;
             document.getElementById('modePickup').classList.toggle('on', mode === 'pickup');
             document.getElementById('modeDelivery').classList.toggle('on', mode === 'delivery');
-            updateAddrCardHighlight();
             clearSearchMarkers();
             document.getElementById('searchInput').value = '';
             document.getElementById('searchDropdown').classList.remove('show');
@@ -449,10 +498,8 @@
         function swapAddrs() {
             [pickupAddr, deliveryAddr] = [deliveryAddr, pickupAddr];
             [pickupCoord, deliveryCoord] = [{...deliveryCoord}, {...pickupCoord}];
-            document.getElementById('pickupText').textContent = pickupAddr.slice(0,20) || '点击地图或搜索选择';
-            document.getElementById('pickupSub').textContent = pickupAddr.length>20 ? pickupAddr : '';
-            document.getElementById('deliveryText').textContent = deliveryAddr.slice(0,20) || '点击地图或搜索选择';
-            document.getElementById('deliverySub').textContent = deliveryAddr.length>20 ? deliveryAddr : '';
+            document.getElementById('pickupInput').value = pickupAddr;
+            document.getElementById('deliveryInput').value = deliveryAddr;
             updateMap();
         }
 
@@ -513,8 +560,11 @@
         async function doSubmit() {
             const token = getToken();
             if (!token) { toast('⚠️ 请先登录'); setTimeout(()=>location.href='login.html',1000); return; }
-            if (!pickupAddr) return toast('⚠️ 请选择取货地点');
-            if (!deliveryAddr) return toast('⚠️ 请选择收货地点');
+            const pv = document.getElementById('pickupInput').value.trim();
+            const dv = document.getElementById('deliveryInput').value.trim();
+            if (!pv) return toast('⚠️ 请填写取货地点');
+            if (!dv) return toast('⚠️ 请填写收货地点');
+            pickupAddr = pv; deliveryAddr = dv;
             const ph = document.getElementById('phoneInput').value.trim();
             if (!ph || !/^\d{11}$/.test(ph)) return toast('⚠️ 请填写正确的11位手机号码');
 
