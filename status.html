@@ -100,7 +100,7 @@
             <div class="mi">🎁</div>
             <h3>确认收货</h3>
             <p id="modalText">请确认已收到物品，确认后款项将结算给骑手。</p>
-            <button class="btn btn-teal" id="modalConfirmBtn" onclick="doConfirm()">✅ 确认无误，打款给骑手</button>
+            <button class="btn btn-teal" id="modalConfirmBtn">✅ 确认无误，打款给骑手</button>
             <button class="btn btn-ghost" onclick="closeModal()">再等等</button>
         </div>
     </div>
@@ -172,7 +172,7 @@
                 <a href="index.html" class="btn btn-outline">返回首页</a>
                 <button class="btn btn-teal" id="contactBtn" onclick="toast('📞 正在呼叫骑手...')" disabled>联系骑手</button>
                 <button class="btn btn-cancel-order" id="cancelBtn" onclick="doCancelOrder()" style="display:none;">取消订单</button>
-                <button class="btn btn-primary" id="confirmBtn" onclick="showModal()" disabled>确认收货</button>
+                <button class="btn btn-primary" id="confirmBtn" disabled>确认收货</button>
             </div>
         </div>
     </main>
@@ -458,51 +458,64 @@
         }
 
         /* ========== 确认收货流程 ========== */
-        async function showModal() {
-            const order = await getOrder();
-            if (!order) { toast('⚠️ 未找到订单，请刷新页面'); return; }
-            if (order.status !== 'delivering') {
-                toast('⚠️ 当前状态：' + order.status + '，请等待骑手确认送达');
-                return;
-            }
-            $('modalText').textContent = `实付金额 ¥ ${order.totalPay || '0.00'}，确认后 ¥ ${(order.riderFee || 0).toFixed(2)} 将结算给骑手。`;
-            $('modal').classList.add('show');
+        // 用 JS 绑定确认按钮，替代 onclick 属性，确保错误可追踪
+        function setupConfirmButton() {
+            const btn = $('confirmBtn');
+            if (!btn) return;
+            btn.onclick = async function() {
+                try {
+                    const order = await getOrder();
+                    if (!order) { toast('⚠️ 未找到订单'); return; }
+                    if (order.status !== 'delivering') {
+                        toast('⚠️ 订单状态：' + order.status + '，请等待骑手确认送达');
+                        return;
+                    }
+                    $('modalText').textContent = '实付金额 ¥' + (order.totalPay || '0.00') + '，确认后 ¥' + ((order.riderFee || 0)).toFixed(2) + ' 将结算给骑手。';
+                    $('modal').classList.add('show');
+                } catch(e) {
+                    toast('⚠️ 操作失败：' + e.message);
+                }
+            };
         }
         function closeModal() { $('modal').classList.remove('show'); }
 
         let confirmedOrderId = null;
 
-        async function doConfirm() {
-            try {
-                const token = getToken(); if (!token) { toast('❌ 请先登录'); return; }
-                const order = await getOrder();
-                if (!order) { toast('❌ 确认失败：未找到订单'); closeModal(); return; }
-                console.log('doConfirm: order status =', order.status, 'order id =', order.id);
-                if (order.status !== 'delivering') { toast('❌ 状态异常：' + order.status); closeModal(); return; }
+        // 用 JS 绑定模态框确认按钮
+        function setupModalConfirmButton() {
+            const btn = $('modalConfirmBtn');
+            if (!btn) return;
+            btn.onclick = async function() {
+                try {
+                    const token = getToken();
+                    if (!token) { toast('❌ 请先登录'); closeModal(); return; }
+                    const order = await getOrder();
+                    if (!order) { toast('❌ 未找到订单'); closeModal(); return; }
+                    if (order.status !== 'delivering') { toast('❌ 状态异常：' + order.status); closeModal(); return; }
 
-                const res = await fetch(API + '/api/orders/' + order.id + '/confirm', {
-                    method: 'POST',
-                    headers: { Authorization: 'Bearer ' + token }
-                });
-                const data = await res.json();
-                if (!res.ok) { toast('❌ ' + (data.error || '确认失败')); closeModal(); return; }
+                    const res = await fetch(API + '/api/orders/' + order.id + '/confirm', {
+                        method: 'POST',
+                        headers: { Authorization: 'Bearer ' + token }
+                    });
+                    const data = await res.json();
+                    if (!res.ok) { toast('❌ ' + (data.error || '确认失败')); closeModal(); return; }
 
-                order.status = 'confirmed';
-                order.commissionReceived = (order.riderFee || 0).toFixed(2);
-                order.confirmedAt = new Date().toISOString();
-                saveOrderLocal(order);
-                confirmedOrderId = order.id;
+                    order.status = 'confirmed';
+                    order.commissionReceived = Number(order.riderFee || 0).toFixed(2);
+                    order.confirmedAt = new Date().toISOString();
+                    saveOrderLocal(order);
+                    confirmedOrderId = order.id;
 
-                closeModal();
-                if (animTimer) clearInterval(animTimer);
-                refreshUI(order);
-                toast('🎉 收货成功！');
-                setTimeout(() => showRatingModal(), 600);
-            } catch(e) {
-                console.error('doConfirm error:', e);
-                toast('⚠️ 网络错误，请刷新重试');
-                closeModal();
-            }
+                    closeModal();
+                    if (animTimer) clearInterval(animTimer);
+                    refreshUI(order);
+                    toast('🎉 收货成功！');
+                    setTimeout(function() { showRatingModal(); }, 600);
+                } catch(e) {
+                    toast('⚠️ 网络错误：' + e.message);
+                    closeModal();
+                }
+            };
         }
 
         // ===== 评价 =====
@@ -605,6 +618,8 @@
             }
             lastStatus = order.status;
             refreshUI(order);
+            setupConfirmButton();
+            setupModalConfirmButton();
             // 等待 Amap 可用后再初始化地图
             waitForAMap(() => { initMap().catch(() => {}); });
             setInterval(pollStatus, 1200);
