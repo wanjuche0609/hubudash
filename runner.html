@@ -227,12 +227,12 @@
                 }
                 if (ordersRes.ok) {
                     const o = await ordersRes.json();
-                    // 检测新订单
-                    if (o.orders && o.orders.length > prevPoolCount && prevPoolCount > 0 && isOnline) {
+                    // 检测新订单（任务大厅的待接单）
+                    if (o.pool && o.pool.length > prevPoolCount && prevPoolCount > 0 && isOnline) {
                         try { document.getElementById('newOrderSound').play(); } catch(e) {}
                     }
-                    if (o.orders) prevPoolCount = o.orders.length;
-                    poolOrders = o.orders || [];
+                    if (o.pool) prevPoolCount = o.pool.length;
+                    poolOrders = o.pool || [];
                     myActiveOrders = o.my_active || [];
                 }
                 if (historyRes.ok) {
