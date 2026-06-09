@@ -9,7 +9,10 @@ const path = require('path');
 const app = express();
 const PORT = 3000;
 const JWT_SECRET = 'hubudash_jwt_secret_2026';
-const DB_PATH = path.join(__dirname, 'hubudash.db');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'hubudash.db');
+// 确保数据目录存在
+const DB_DIR = path.dirname(DB_PATH);
+if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 
 app.use(cors());
 app.use(express.json());
