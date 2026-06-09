@@ -65,7 +65,7 @@
     <div class="toast" id="toast"></div>
 
     <script>
-        const API = 'http://localhost:3000';
+        const API = '';
         function switchTab(t) {
             document.querySelectorAll('.tab').forEach((x,i) => x.classList.toggle('on', (i===0&&t==='login')||(i===1&&t==='register')));
             document.getElementById('loginForm').style.display = t==='login'?'block':'none';
