@@ -457,26 +457,33 @@
 
         /* ========== 确认收货流程 ========== */
         async function showModal() {
-            const order = await getOrder();
-            if (!order) { toast('⚠️ 未找到订单，请刷新页面'); return; }
-            if (order.status !== 'delivering') {
-                toast('⚠️ 骑手尚未确认送达，请耐心等待');
-                return;
+            try {
+                const order = await getOrder();
+                if (!order) { toast('⚠️ 未找到订单，请刷新页面'); return; }
+                console.log('showModal: order status =', order.status, 'order id =', order.id);
+                if (order.status !== 'delivering') {
+                    toast('⚠️ 当前状态：' + order.status + '，请等待骑手确认送达');
+                    return;
+                }
+                $('modalText').textContent = `实付金额 ¥ ${order.totalPay || '0.00'}，确认后 ¥ ${(order.riderFee || 0).toFixed(2)} 将结算给骑手。`;
+                $('modal').classList.add('show');
+            } catch(e) {
+                console.error('showModal error:', e);
+                toast('⚠️ 出错了，请刷新页面重试');
             }
-            $('modalText').textContent = `实付金额 ¥ ${order.totalPay || '0.00'}，确认后 ¥ ${(order.riderFee || 0).toFixed(2)} 将结算给骑手。`;
-            $('modal').classList.add('show');
         }
         function closeModal() { $('modal').classList.remove('show'); }
 
         let confirmedOrderId = null;
 
         async function doConfirm() {
-            const token = getToken(); if (!token) return;
-            const order = await getOrder();
-            if (!order) { toast('❌ 确认失败：未找到订单'); return; }
-            if (order.status !== 'delivering') { toast('❌ 订单状态异常，请刷新页面'); closeModal(); return; }
-
             try {
+                const token = getToken(); if (!token) { toast('❌ 请先登录'); return; }
+                const order = await getOrder();
+                if (!order) { toast('❌ 确认失败：未找到订单'); closeModal(); return; }
+                console.log('doConfirm: order status =', order.status, 'order id =', order.id);
+                if (order.status !== 'delivering') { toast('❌ 状态异常：' + order.status); closeModal(); return; }
+
                 const res = await fetch(API + '/api/orders/' + order.id + '/confirm', {
                     method: 'POST',
                     headers: { Authorization: 'Bearer ' + token }
@@ -493,11 +500,12 @@
                 closeModal();
                 if (animTimer) clearInterval(animTimer);
                 refreshUI(order);
-                toast(`🎉 收货成功！`);
-                // 弹出评价弹窗
+                toast('🎉 收货成功！');
                 setTimeout(() => showRatingModal(), 600);
             } catch(e) {
-                toast('⚠️ 网络错误，请确保服务已启动');
+                console.error('doConfirm error:', e);
+                toast('⚠️ 网络错误，请刷新重试');
+                closeModal();
             }
         }
 
